@@ -18,11 +18,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          dkp-pacman -Syu --noconfirm
-          dkp-pacman -S --needed --noconfirm 3ds-dev libctru citro2d citro3d picasso-git
-
       - name: Build Citro.3dsx executable
         run: |
           export DEVKITPRO=/opt/devkitpro
