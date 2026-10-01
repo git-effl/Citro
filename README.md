@@ -58,3 +58,16 @@ This will produce `Citro.3dsx` in the project root.
 ### 4. Running on Hardware
 
 Copy `Citro.3dsx` to your Nintendo 3DS SD card at `/3ds/Citro/Citro.3dsx` and launch it from the Homebrew Launcher.
+
+---
+
+## Security & Multi-Licensing
+
+Citro is distributed under a tri-license / multi-license agreement for maximum open-source flexibility, security patent coverage, and creative attribution:
+
+1. **Primary License**: [GNU General Public License v3.0 (GPL-3.0)](LICENSE)
+2. **Secondary Permissive & Patent License**: [Apache License 2.0 (Apache-2.0)](LICENSE)
+3. **Secondary Documentation & Media License**: [Creative Commons Attribution-ShareAlike 4.0 International (CC-BY-SA 4.0)](LICENSE)
+
+SPDX-License-Identifier: `GPL-3.0-or-later OR Apache-2.0 OR CC-BY-SA-4.0`
+

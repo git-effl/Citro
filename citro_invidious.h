@@ -3,6 +3,9 @@
  * Citro - Lightweight Invidious YouTube Client for Nintendo 3DS
  * File: citro_invidious.h
  * ----------------------------------------------------------------------------
+ * SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0 OR CC-BY-SA-4.0
+ * Licensed under GPL-3.0, Apache-2.0, and CC-BY-SA-4.0.
+ *
  * Header defining data structures, state machines, and networking/JSON
  * prototypes for querying open public Invidious instances without API keys.
  *
