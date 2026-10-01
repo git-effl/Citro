@@ -1,0 +1,19 @@
+# Build artifacts for devkitARM / 3DS
+*.o
+*.elf
+*.smdh
+*.3dsx
+build/
+
+# Local web preview / node tooling
+node_modules/
+dist/
+src/
+package.json
+package-lock.json
+bun.lock
+vite.config.ts
+tsconfig.json
+index.html
+metadata.json
+.DS_Store
