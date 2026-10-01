@@ -3,9 +3,6 @@
  * Citro - Lightweight Invidious YouTube Client for Nintendo 3DS
  * File: main.c
  * ----------------------------------------------------------------------------
- * SPDX-License-Identifier: GPL-3.0-or-later OR Apache-2.0 OR CC-BY-SA-4.0
- * Licensed under GPL-3.0, Apache-2.0, and CC-BY-SA-4.0.
- *
  * Features:
  *  - Full devkitPro/libctru and citro2d dual-screen lifecycle
  *  - SOC (Socket Service) memory-aligned initialization for network requests

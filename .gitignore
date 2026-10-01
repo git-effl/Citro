@@ -8,6 +8,7 @@ build/
 # Local web preview / node tooling
 node_modules/
 dist/
+public/
 src/
 package.json
 package-lock.json
