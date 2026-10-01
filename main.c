@@ -271,7 +271,7 @@ static void render_bottom_screen(void) {
         /* Likes display with thumb icon: (180, 5, 130, 24) */
         char likesStr[32];
         if (s_playback.currentVideo.likeCount > 0) {
-            snprintf(likesStr, sizeof(likesStr), "[+] %d Likes", s_playback.currentVideo.likeCount);
+            snprintf(likesStr, sizeof(likesStr), "[+] %ld Likes", (long)s_playback.currentVideo.likeCount);
         } else {
             snprintf(likesStr, sizeof(likesStr), "[+] Like Video");
         }
@@ -593,7 +593,6 @@ int main(int argc, char **argv) {
         /* Scan input hardware buttons and touchscreen state */
         hidScanInput();
         u32 kDown = hidKeysDown();
-        u32 kHeld = hidKeysHeld();
 
         /* Exit application on START button press */
         if (kDown & KEY_START) {
@@ -657,7 +656,7 @@ int main(int argc, char **argv) {
         render_bottom_screen();
 
         /* Swap framebuffers and present */
-        C3D_FrameEnd();
+        C3D_FrameEnd(0);
     }
 
     /* ------------------------------------------------------------------------
