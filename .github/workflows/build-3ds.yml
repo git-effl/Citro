@@ -1,0 +1,37 @@
+name: Build Nintendo 3DS Homebrew
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compile Citro.3dsx
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          dkp-pacman -Syu --noconfirm
+          dkp-pacman -S --needed --noconfirm 3ds-dev libctru citro2d citro3d picasso-git
+
+      - name: Build Citro.3dsx executable
+        run: |
+          export DEVKITPRO=/opt/devkitpro
+          export DEVKITARM=$DEVKITPRO/devkitARM
+          make
+
+      - name: Upload 3DS Executable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Citro-3DSX-Executable
+          path: Citro.3dsx
+          if-no-files-found: warn

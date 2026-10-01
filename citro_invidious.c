@@ -269,3 +269,54 @@ int invidious_parse_video_json(const char *json_str, VideoMetadata *out_video) {
     cJSON_Delete(root);
     return 0;
 }
+
+Result citro_battery_init(void) {
+    /* Initialize PTM:U service for hardware battery monitoring */
+    return ptmuInit();
+}
+
+void citro_battery_exit(void) {
+    ptmuExit();
+}
+
+Result citro_battery_update(BatteryStatus *status) {
+    if (!status) return -1;
+
+    u8 level = 5;
+    u8 charge = 0;
+    u8 adapter = 0;
+
+    Result res = PTMU_GetBatteryLevel(&level);
+    if (R_SUCCEEDED(res)) {
+        status->level = level;
+        /* Map 0-5 3DS bars to estimated percentage: 5=100%, 4=80%, 3=60%, 2=40%, 1=20%, 0=5% */
+        switch (level) {
+            case 5: status->percent = 100; break;
+            case 4: status->percent = 80;  break;
+            case 3: status->percent = 60;  break;
+            case 2: status->percent = 40;  break;
+            case 1: status->percent = 20;  break;
+            case 0:
+            default: status->percent = 5;  break;
+        }
+    } else {
+        /* Fallback if ptmu not available */
+        status->level = 5;
+        status->percent = 100;
+    }
+
+    if (R_SUCCEEDED(PTMU_GetBatteryChargeState(&charge))) {
+        status->isCharging = (charge != 0);
+    } else {
+        status->isCharging = false;
+    }
+
+    if (R_SUCCEEDED(PTMU_GetAdapterState(&adapter))) {
+        status->isAdapterPlugged = (adapter != 0);
+    } else {
+        status->isAdapterPlugged = false;
+    }
+
+    return 0;
+}
+

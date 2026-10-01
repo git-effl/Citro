@@ -40,18 +40,20 @@
 /* 5 seconds in CPU ticks (3DS CPU is ~268.12 MHz) */
 #define OSD_DURATION_TICKS     (5ULL * 268123480ULL)
 
-/* Colors in RGBA8 format for citro2d */
-#define COLOR_BG               C2D_Color32(24, 24, 28, 255)
-#define COLOR_PANEL            C2D_Color32(36, 36, 44, 255)
-#define COLOR_PANEL_ALT        C2D_Color32(48, 48, 58, 255)
-#define COLOR_ACCENT           C2D_Color32(230, 33, 23, 255)   /* YouTube Red */
-#define COLOR_ACCENT_HOVER     C2D_Color32(255, 60, 50, 255)
-#define COLOR_TEXT_WHITE       C2D_Color32(240, 240, 240, 255)
-#define COLOR_TEXT_MUTED       C2D_Color32(160, 160, 170, 255)
-#define COLOR_SEEK_BG          C2D_Color32(60, 60, 70, 255)
-#define COLOR_SEEK_FILL        C2D_Color32(230, 33, 23, 255)
-#define COLOR_BANNER_BG        C2D_Color32(10, 10, 14, 220)
-#define COLOR_BUTTON_BLUE      C2D_Color32(33, 150, 243, 255)
+/* Citric Theme Colors in RGBA8 format for citro2d */
+#define COLOR_BG               C2D_Color32(18, 20, 16, 255)    /* Citrus Rind Dark Slate */
+#define COLOR_PANEL            C2D_Color32(28, 32, 24, 255)    /* Citric Charcoal */
+#define COLOR_PANEL_ALT        C2D_Color32(40, 46, 34, 255)    /* Citric Tint */
+#define COLOR_ACCENT           C2D_Color32(249, 115, 22, 255)  /* Citrus Tangerine Orange */
+#define COLOR_ACCENT_HOVER     C2D_Color32(251, 146, 60, 255)  /* Citrus Light Orange */
+#define COLOR_LIME             C2D_Color32(132, 204, 22, 255)  /* Citric Lime Green */
+#define COLOR_LEMON            C2D_Color32(234, 179, 8, 255)   /* Meyer Lemon Yellow */
+#define COLOR_TEXT_WHITE       C2D_Color32(248, 250, 245, 255)
+#define COLOR_TEXT_MUTED       C2D_Color32(163, 175, 155, 255)
+#define COLOR_SEEK_BG          C2D_Color32(50, 56, 46, 255)
+#define COLOR_SEEK_FILL        C2D_Color32(249, 115, 22, 255)  /* Citrus Orange Fill */
+#define COLOR_BANNER_BG        C2D_Color32(12, 16, 12, 225)
+#define COLOR_BUTTON_BLUE      C2D_Color32(132, 204, 22, 255)  /* Citric Lime Action */
 
 /* Pre-allocated static buffers to avoid dynamic allocation during 60FPS render loop */
 static u32 *s_socBuffer = NULL;
@@ -59,10 +61,11 @@ static C2D_TextBuf s_staticTextBuf;
 static C2D_Text s_textObjects[32];
 
 /* Global Application State */
-static AppState      s_appState = STATE_SEARCH;
-static SearchResults s_searchResults;
-static PlaybackState s_playback;
-static int           s_selectedResultIndex = 0;
+static AppState       s_appState = STATE_SEARCH;
+static SearchResults  s_searchResults;
+static PlaybackState  s_playback;
+static BatteryStatus  s_battery = { .level = 5, .percent = 100, .isCharging = false, .isAdapterPlugged = false };
+static int            s_selectedResultIndex = 0;
 static int           s_descScrollOffset = 0;
 
 /**
@@ -213,6 +216,39 @@ static void render_top_screen(void) {
             C2D_DrawText(&s_textObjects[6], C2D_WithColor, 30, 192, 0, 0.42f, 0.42f, COLOR_TEXT_MUTED);
         }
     }
+
+    /* ------------------------------------------------------------------------
+     * Top-Right 3DS Hardware Battery Level Indicator
+     * ------------------------------------------------------------------------ */
+    /* Draw 3DS battery casing */
+    int bx = 350;
+    int by = 6;
+    C2D_DrawRectSolid(bx, by, 0, 34, 14, C2D_Color32(40, 46, 36, 255));
+    C2D_DrawRectSolid(bx + 34, by + 3, 0, 3, 8, C2D_Color32(70, 80, 60, 255));
+    C2D_DrawRectSolid(bx + 2, by + 2, 0, 30, 10, C2D_Color32(14, 18, 14, 255));
+
+    /* Select battery color: Lime for healthy/charging, Lemon for mid, Tangerine for low */
+    u32 batColor = COLOR_LIME;
+    if (s_battery.level <= 1) {
+        batColor = COLOR_ACCENT; /* Low battery orange */
+    } else if (s_battery.level <= 2) {
+        batColor = COLOR_LEMON;  /* Mid battery lemon */
+    }
+
+    /* Draw filled battery bars */
+    int fillWidth = (s_battery.level * 30) / 5;
+    if (fillWidth > 30) fillWidth = 30;
+    if (fillWidth > 0) {
+        C2D_DrawRectSolid(bx + 2, by + 2, 0, fillWidth, 10, batColor);
+    }
+
+    /* Render percentage / charging text */
+    C2D_TextBufClear(s_staticTextBuf);
+    char batStr[24];
+    snprintf(batStr, sizeof(batStr), "%s%d%%", s_battery.isCharging ? "+" : "", s_battery.percent);
+    C2D_TextParse(&s_textObjects[7], s_staticTextBuf, batStr);
+    C2D_TextOptimize(&s_textObjects[7]);
+    C2D_DrawText(&s_textObjects[7], C2D_WithColor, bx - 38, by + 1, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
 }
 
 /**
@@ -539,6 +575,11 @@ int main(int argc, char **argv) {
     /* Initialize Invidious HTTP client context */
     invidious_init();
 
+    /* Initialize 3DS PTM battery monitoring service */
+    citro_battery_init();
+    citro_battery_update(&s_battery);
+    u32 frameCounter = 0;
+
     /* ------------------------------------------------------------------------
      * 3. Initial Keyless Invidious API Query
      * ------------------------------------------------------------------------ */
@@ -600,6 +641,11 @@ int main(int argc, char **argv) {
             }
         }
 
+        /* Update battery status every 60 frames (~1 sec) */
+        if (++frameCounter % 60 == 0) {
+            citro_battery_update(&s_battery);
+        }
+
         /* --------------------------------------------------------------------
          * Frame Rendering Begin
          * -------------------------------------------------------------------- */
@@ -620,6 +666,7 @@ int main(int argc, char **argv) {
     /* ------------------------------------------------------------------------
      * 5. Clean Teardown & Resource Release
      * ------------------------------------------------------------------------ */
+    citro_battery_exit();
     invidious_exit();
 
     if (s_socBuffer) {

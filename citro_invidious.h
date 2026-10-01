@@ -87,6 +87,31 @@ typedef struct {
  * ============================================================================ */
 
 /**
+ * BatteryStatus: 3DS Hardware battery status queried from PTM:U service.
+ */
+typedef struct {
+    u8   level;             /* 0 to 5 bars (5 = 100% full, 0 = critical low) */
+    u8   percent;           /* Estimated percentage (0 - 100%) */
+    bool isCharging;        /* True if AC adapter currently charging */
+    bool isAdapterPlugged;  /* True if wall charger connected */
+} BatteryStatus;
+
+/**
+ * Initialize 3DS PTM (Power Management) service for battery querying.
+ */
+Result citro_battery_init(void);
+
+/**
+ * Exit PTM service.
+ */
+void citro_battery_exit(void);
+
+/**
+ * Query current hardware battery level and charging state.
+ */
+Result citro_battery_update(BatteryStatus *status);
+
+/**
  * Initialize internal network buffers and HTTP client context.
  * Must be called after socInit() or httpcInit().
  *
