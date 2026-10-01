@@ -18,10 +18,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install 3DS development libraries
+        run: |
+          dkp-pacman -S --needed --noconfirm 3ds-dev
+
       - name: Build Citro.3dsx executable
         run: |
           export DEVKITPRO=/opt/devkitpro
           export DEVKITARM=$DEVKITPRO/devkitARM
+          export CTRULIB=$DEVKITPRO/libctru
+          export PATH=$DEVKITARM/bin:$DEVKITPRO/tools/bin:$PATH
+          make clean
           make
 
       - name: Upload 3DS Executable Artifact
