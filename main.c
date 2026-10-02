@@ -54,8 +54,10 @@
 
 /* Pre-allocated static buffers to avoid dynamic allocation during 60FPS render loop */
 static u32 *s_socBuffer = NULL;
-static C2D_TextBuf s_staticTextBuf;
-static C2D_Text s_textObjects[32];
+static C2D_TextBuf s_topTextBuf;
+static C2D_TextBuf s_bottomTextBuf;
+static C2D_Text s_topTexts[16];
+static C2D_Text s_bottomTexts[24];
 
 /* Global Application State */
 static AppState       s_appState = STATE_SEARCH;
@@ -67,15 +69,14 @@ static int           s_descScrollOffset = 0;
 
 /* Invidious Server Presets & Configurable Instance Host */
 static const char *s_serverPresets[] = {
+    "invidious.f5.si",
     "invidious.flokinet.to",
-    "yewtu.be",
     "inv.nadeko.net",
-    "vid.puffyan.us",
-    "invidious.nerdvpn.de"
+    "yewtu.be"
 };
 #define NUM_SERVER_PRESETS (int)(sizeof(s_serverPresets) / sizeof(s_serverPresets[0]))
 static int  s_currentServerIndex = 0;
-static char s_currentHost[128] = "invidious.flokinet.to";
+static char s_currentHost[128] = "invidious.f5.si";
 
 /**
  * Cycle to the next preset Invidious instance host.
@@ -171,13 +172,13 @@ static void render_top_screen(void) {
         C2D_DrawRectSolid(20, 206, 0, (int)(360.0f * progress), 4, COLOR_SEEK_FILL);
 
         /* Center Video ID & Channel info */
-        C2D_TextBufClear(s_staticTextBuf);
+        C2D_TextBufClear(s_topTextBuf);
         char topInfoStr[128];
         snprintf(topInfoStr, sizeof(topInfoStr), "Channel: %s | ID: %s",
                  s_playback.currentVideo.author, s_playback.currentVideo.videoId);
-        C2D_TextParse(&s_textObjects[0], s_staticTextBuf, topInfoStr);
-        C2D_TextOptimize(&s_textObjects[0]);
-        C2D_DrawText(&s_textObjects[0], C2D_WithColor, 30, 180, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
+        C2D_TextParse(&s_topTexts[0], s_topTextBuf, topInfoStr);
+        C2D_TextOptimize(&s_topTexts[0]);
+        C2D_DrawText(&s_topTexts[0], C2D_WithColor, 30, 180, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
 
         /* --------------------------------------------------------------------
          * 5-Second Title Banner OSD Requirement:
@@ -203,9 +204,9 @@ static void render_top_screen(void) {
                 C2D_DrawRectSolid(20, 56, 0, 360, 2, C2D_Color32(230, 33, 23, alphaByte));
 
                 /* Video Title */
-                C2D_TextParse(&s_textObjects[2], s_staticTextBuf, s_playback.currentVideo.title);
-                C2D_TextOptimize(&s_textObjects[2]);
-                C2D_DrawText(&s_textObjects[2], C2D_WithColor, 28, 16, 0, 0.52f, 0.52f,
+                C2D_TextParse(&s_topTexts[2], s_topTextBuf, s_playback.currentVideo.title);
+                C2D_TextOptimize(&s_topTexts[2]);
+                C2D_DrawText(&s_topTexts[2], C2D_WithColor, 28, 16, 0, 0.52f, 0.52f,
                              C2D_Color32(255, 255, 255, textAlpha));
 
                 /* Author and duration */
@@ -214,9 +215,9 @@ static void render_top_screen(void) {
                 int secs = s_playback.currentVideo.lengthSeconds % 60;
                 snprintf(bannerSubStr, sizeof(bannerSubStr), "%s * %02d:%02d",
                          s_playback.currentVideo.author, mins, secs);
-                C2D_TextParse(&s_textObjects[3], s_staticTextBuf, bannerSubStr);
-                C2D_TextOptimize(&s_textObjects[3]);
-                C2D_DrawText(&s_textObjects[3], C2D_WithColor, 28, 36, 0, 0.42f, 0.42f,
+                C2D_TextParse(&s_topTexts[3], s_topTextBuf, bannerSubStr);
+                C2D_TextOptimize(&s_topTexts[3]);
+                C2D_DrawText(&s_topTexts[3], C2D_WithColor, 28, 36, 0, 0.42f, 0.42f,
                              C2D_Color32(200, 200, 210, textAlpha));
             } else {
                 s_playback.showTitleBanner = false;
@@ -227,28 +228,28 @@ static void render_top_screen(void) {
         C2D_DrawRectSolid(0, 0, 0, SCREEN_TOP_WIDTH, 40, COLOR_PANEL);
         C2D_DrawRectSolid(0, 38, 0, SCREEN_TOP_WIDTH, 2, COLOR_ACCENT);
 
-        C2D_TextBufClear(s_staticTextBuf);
-        C2D_TextParse(&s_textObjects[0], s_staticTextBuf, "Citro 3DS - Invidious YouTube Client");
-        C2D_TextOptimize(&s_textObjects[0]);
-        C2D_DrawText(&s_textObjects[0], C2D_WithColor, 20, 10, 0, 0.65f, 0.65f, COLOR_TEXT_WHITE);
+        C2D_TextBufClear(s_topTextBuf);
+        C2D_TextParse(&s_topTexts[0], s_topTextBuf, "Citro 3DS - Invidious YouTube Client");
+        C2D_TextOptimize(&s_topTexts[0]);
+        C2D_DrawText(&s_topTexts[0], C2D_WithColor, 20, 10, 0, 0.65f, 0.65f, COLOR_TEXT_WHITE);
 
         /* Query Info */
         char searchInfo[256];
         snprintf(searchInfo, sizeof(searchInfo), "Query: \"%s\" (%d results from %s)",
                  s_searchResults.query, s_searchResults.count, s_currentHost);
-        C2D_TextParse(&s_textObjects[1], s_staticTextBuf, searchInfo);
-        C2D_TextOptimize(&s_textObjects[1]);
-        C2D_DrawText(&s_textObjects[1], C2D_WithColor, 20, 50, 0, 0.45f, 0.45f, COLOR_ACCENT);
+        C2D_TextParse(&s_topTexts[1], s_topTextBuf, searchInfo);
+        C2D_TextOptimize(&s_topTexts[1]);
+        C2D_DrawText(&s_topTexts[1], C2D_WithColor, 20, 50, 0, 0.45f, 0.45f, COLOR_ACCENT);
 
         /* Instructions list */
-        C2D_TextParse(&s_textObjects[2], s_staticTextBuf, "* Touch bottom screen to select a video or use quick tags");
-        C2D_DrawText(&s_textObjects[2], C2D_WithColor, 20, 80, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_topTexts[2], s_topTextBuf, "* Touch bottom screen to select a video or use quick tags");
+        C2D_DrawText(&s_topTexts[2], C2D_WithColor, 20, 80, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
 
-        C2D_TextParse(&s_textObjects[3], s_staticTextBuf, "* (X) Cycle Server | (Y) Custom Server | (A) Play Video");
-        C2D_DrawText(&s_textObjects[3], C2D_WithColor, 20, 105, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
+        C2D_TextParse(&s_topTexts[3], s_topTextBuf, "* (X) Cycle Server | (Y) Custom Server | (A) Play Video");
+        C2D_DrawText(&s_topTexts[3], C2D_WithColor, 20, 105, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
 
-        C2D_TextParse(&s_textObjects[4], s_staticTextBuf, "* Pure Invidious API • Open Protocol Streaming");
-        C2D_DrawText(&s_textObjects[4], C2D_WithColor, 20, 130, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
+        C2D_TextParse(&s_topTexts[4], s_topTextBuf, "* Pure Invidious API • Open Protocol Streaming");
+        C2D_DrawText(&s_topTexts[4], C2D_WithColor, 20, 130, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
 
         /* Selected Video Preview Box */
         if (s_searchResults.count > 0 && s_selectedResultIndex < s_searchResults.count) {
@@ -256,14 +257,14 @@ static void render_top_screen(void) {
             C2D_DrawRectSolid(20, 160, 0, 360, 68, COLOR_PANEL);
             C2D_DrawRectSolid(20, 160, 0, 3, 68, COLOR_ACCENT);
 
-            C2D_TextParse(&s_textObjects[5], s_staticTextBuf, preview->title);
-            C2D_DrawText(&s_textObjects[5], C2D_WithColor, 30, 166, 0, 0.50f, 0.50f, COLOR_TEXT_WHITE);
+            C2D_TextParse(&s_topTexts[5], s_topTextBuf, preview->title);
+            C2D_DrawText(&s_topTexts[5], C2D_WithColor, 30, 166, 0, 0.50f, 0.50f, COLOR_TEXT_WHITE);
 
             char sub[128];
             snprintf(sub, sizeof(sub), "By %s | %d mins | %" PRId64 " views",
                      preview->author, preview->lengthSeconds / 60, preview->viewCount);
-            C2D_TextParse(&s_textObjects[6], s_staticTextBuf, sub);
-            C2D_DrawText(&s_textObjects[6], C2D_WithColor, 30, 192, 0, 0.42f, 0.42f, COLOR_TEXT_MUTED);
+            C2D_TextParse(&s_topTexts[6], s_topTextBuf, sub);
+            C2D_DrawText(&s_topTexts[6], C2D_WithColor, 30, 192, 0, 0.42f, 0.42f, COLOR_TEXT_MUTED);
         }
     }
 
@@ -307,7 +308,7 @@ static void render_top_screen(void) {
  */
 static void render_bottom_screen(void) {
     C2D_DrawRectSolid(0, 0, 0, SCREEN_BOTTOM_WIDTH, SCREEN_BOTTOM_HEIGHT, COLOR_BG);
-    C2D_TextBufClear(s_staticTextBuf);
+    C2D_TextBufClear(s_bottomTextBuf);
 
     if (s_appState == STATE_PLAYBACK) {
         /* --------------------------------------------------------------------
@@ -318,8 +319,8 @@ static void render_bottom_screen(void) {
 
         /* "< Search" Back Button: (10, 5, 80, 24) */
         C2D_DrawRectSolid(8, 5, 0, 75, 24, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_textObjects[0], s_staticTextBuf, "< Search");
-        C2D_DrawText(&s_textObjects[0], C2D_WithColor, 14, 9, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[0], s_bottomTextBuf, "< Search");
+        C2D_DrawText(&s_bottomTexts[0], C2D_WithColor, 14, 9, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Likes display with thumb icon: (180, 5, 130, 24) */
         char likesStr[32];
@@ -329,19 +330,19 @@ static void render_bottom_screen(void) {
             snprintf(likesStr, sizeof(likesStr), "[+] Like Video");
         }
         C2D_DrawRectSolid(200, 5, 0, 112, 24, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_textObjects[1], s_staticTextBuf, likesStr);
-        C2D_DrawText(&s_textObjects[1], C2D_WithColor, 208, 9, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[1], s_bottomTextBuf, likesStr);
+        C2D_DrawText(&s_bottomTexts[1], C2D_WithColor, 208, 9, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Video Title on Touch Screen */
-        C2D_TextParse(&s_textObjects[2], s_staticTextBuf, s_playback.currentVideo.title);
-        C2D_DrawText(&s_textObjects[2], C2D_WithColor, 10, 42, 0, 0.46f, 0.46f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[2], s_bottomTextBuf, s_playback.currentVideo.title);
+        C2D_DrawText(&s_bottomTexts[2], C2D_WithColor, 10, 42, 0, 0.46f, 0.46f, COLOR_TEXT_WHITE);
 
         /* Author and Views */
         char metaStr[96];
         snprintf(metaStr, sizeof(metaStr), "%s * %" PRId64 " views",
                  s_playback.currentVideo.author, s_playback.currentVideo.viewCount);
-        C2D_TextParse(&s_textObjects[3], s_staticTextBuf, metaStr);
-        C2D_DrawText(&s_textObjects[3], C2D_WithColor, 10, 62, 0, 0.40f, 0.40f, COLOR_TEXT_MUTED);
+        C2D_TextParse(&s_bottomTexts[3], s_bottomTextBuf, metaStr);
+        C2D_DrawText(&s_bottomTexts[3], C2D_WithColor, 10, 62, 0, 0.40f, 0.40f, COLOR_TEXT_MUTED);
 
         /* --------------------------------------------------------------------
          * Interactive Touch Seek Bar: (20, 90, 280, 16)
@@ -364,32 +365,32 @@ static void render_bottom_screen(void) {
         int totM = s_playback.currentVideo.lengthSeconds / 60;
         int totS = s_playback.currentVideo.lengthSeconds % 60;
         snprintf(timeStr, sizeof(timeStr), "%02d:%02d / %02d:%02d", curM, curS, totM, totS);
-        C2D_TextParse(&s_textObjects[4], s_staticTextBuf, timeStr);
-        C2D_DrawText(&s_textObjects[4], C2D_WithColor, 20, 112, 0, 0.40f, 0.40f, COLOR_TEXT_MUTED);
+        C2D_TextParse(&s_bottomTexts[4], s_bottomTextBuf, timeStr);
+        C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 20, 112, 0, 0.40f, 0.40f, COLOR_TEXT_MUTED);
 
         /* --------------------------------------------------------------------
          * Touch Transport Controls
          * -------------------------------------------------------------------- */
         /* Rewind 10s: (20, 140, 60, 42) */
         C2D_DrawRectSolid(20, 140, 0, 60, 42, COLOR_PANEL);
-        C2D_TextParse(&s_textObjects[5], s_staticTextBuf, "-10s");
-        C2D_DrawText(&s_textObjects[5], C2D_WithColor, 35, 152, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[5], s_bottomTextBuf, "-10s");
+        C2D_DrawText(&s_bottomTexts[5], C2D_WithColor, 35, 152, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
 
         /* Big Play/Pause Button: (95, 135, 130, 52) */
         C2D_DrawRectSolid(95, 135, 0, 130, 52, s_playback.isPlaying ? COLOR_ACCENT : COLOR_BUTTON_BLUE);
         const char *btnLabel = s_playback.isPlaying ? "PAUSE [||]" : "PLAY [>]";
-        C2D_TextParse(&s_textObjects[6], s_staticTextBuf, btnLabel);
-        C2D_DrawText(&s_textObjects[6], C2D_WithColor, 122, 150, 0, 0.55f, 0.55f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[6], s_bottomTextBuf, btnLabel);
+        C2D_DrawText(&s_bottomTexts[6], C2D_WithColor, 122, 150, 0, 0.55f, 0.55f, COLOR_TEXT_WHITE);
 
         /* Fast Forward 10s: (240, 140, 60, 42) */
         C2D_DrawRectSolid(240, 140, 0, 60, 42, COLOR_PANEL);
-        C2D_TextParse(&s_textObjects[7], s_staticTextBuf, "+10s");
-        C2D_DrawText(&s_textObjects[7], C2D_WithColor, 255, 152, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[7], s_bottomTextBuf, "+10s");
+        C2D_DrawText(&s_bottomTexts[7], C2D_WithColor, 255, 152, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
 
         /* Description Toggle Button: (20, 196, 280, 36) */
         C2D_DrawRectSolid(20, 196, 0, 280, 36, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_textObjects[8], s_staticTextBuf, "=== View Video Description ===");
-        C2D_DrawText(&s_textObjects[8], C2D_WithColor, 55, 206, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[8], s_bottomTextBuf, "=== View Video Description ===");
+        C2D_DrawText(&s_bottomTexts[8], C2D_WithColor, 55, 206, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
 
     } else if (s_appState == STATE_COMMENTS) {
         /* Description and Details Fullscreen View */
@@ -397,12 +398,12 @@ static void render_bottom_screen(void) {
 
         /* "< Back to Player" Button: (10, 5, 120, 24) */
         C2D_DrawRectSolid(8, 5, 0, 115, 24, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_textObjects[0], s_staticTextBuf, "< Back to Player");
-        C2D_DrawText(&s_textObjects[0], C2D_WithColor, 14, 9, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[0], s_bottomTextBuf, "< Back to Player");
+        C2D_DrawText(&s_bottomTexts[0], C2D_WithColor, 14, 9, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Description title */
-        C2D_TextParse(&s_textObjects[1], s_staticTextBuf, "Description");
-        C2D_DrawText(&s_textObjects[1], C2D_WithColor, 140, 9, 0, 0.48f, 0.48f, COLOR_ACCENT);
+        C2D_TextParse(&s_bottomTexts[1], s_bottomTextBuf, "Description");
+        C2D_DrawText(&s_bottomTexts[1], C2D_WithColor, 140, 9, 0, 0.48f, 0.48f, COLOR_ACCENT);
 
         /* Render multi-line description snippet */
         C2D_DrawRectSolid(10, 42, 0, 300, 150, COLOR_PANEL);
@@ -410,17 +411,17 @@ static void render_bottom_screen(void) {
         if (!desc || strlen(desc) == 0) {
             desc = "No description provided for this video.";
         }
-        C2D_TextParse(&s_textObjects[2], s_staticTextBuf, desc);
-        C2D_DrawText(&s_textObjects[2], C2D_WithColor, 18, 48 - s_descScrollOffset, 0, 0.40f, 0.40f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[2], s_bottomTextBuf, desc);
+        C2D_DrawText(&s_bottomTexts[2], C2D_WithColor, 18, 48 - s_descScrollOffset, 0, 0.40f, 0.40f, COLOR_TEXT_WHITE);
 
         /* Scroll Up / Down Touch Buttons */
         C2D_DrawRectSolid(10, 200, 0, 145, 32, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_textObjects[3], s_staticTextBuf, "[^] Scroll Up");
-        C2D_DrawText(&s_textObjects[3], C2D_WithColor, 40, 208, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[3], s_bottomTextBuf, "[^] Scroll Up");
+        C2D_DrawText(&s_bottomTexts[3], C2D_WithColor, 40, 208, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         C2D_DrawRectSolid(165, 200, 0, 145, 32, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_textObjects[4], s_staticTextBuf, "[v] Scroll Down");
-        C2D_DrawText(&s_textObjects[4], C2D_WithColor, 195, 208, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[4], s_bottomTextBuf, "[v] Scroll Down");
+        C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 195, 208, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
     } else {
         /* STATE_SEARCH: Invidious Search Results List */
@@ -428,48 +429,85 @@ static void render_bottom_screen(void) {
 
         /* Quick Search Tag 1: "3DS" (8, 6, 70, 24) */
         C2D_DrawRectSolid(8, 6, 0, 70, 24, COLOR_ACCENT);
-        C2D_TextParse(&s_textObjects[0], s_staticTextBuf, "\"3ds\"");
-        C2D_DrawText(&s_textObjects[0], C2D_WithColor, 26, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[0], s_bottomTextBuf, "\"3ds\"");
+        C2D_DrawText(&s_bottomTexts[0], C2D_WithColor, 26, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Quick Search Tag 2: "Homebrew" (84, 6, 95, 24) */
         C2D_DrawRectSolid(84, 6, 0, 95, 24, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_textObjects[1], s_staticTextBuf, "\"homebrew\"");
-        C2D_DrawText(&s_textObjects[1], C2D_WithColor, 94, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[1], s_bottomTextBuf, "\"homebrew\"");
+        C2D_DrawText(&s_bottomTexts[1], C2D_WithColor, 94, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Quick Search Tag 3: "Chiptune" (185, 6, 85, 24) */
         C2D_DrawRectSolid(185, 6, 0, 85, 24, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_textObjects[2], s_staticTextBuf, "\"chiptune\"");
-        C2D_DrawText(&s_textObjects[2], C2D_WithColor, 195, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[2], s_bottomTextBuf, "\"chiptune\"");
+        C2D_DrawText(&s_bottomTexts[2], C2D_WithColor, 195, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Refresh Button: (275, 6, 38, 24) */
         C2D_DrawRectSolid(275, 6, 0, 38, 24, COLOR_BUTTON_BLUE);
-        C2D_TextParse(&s_textObjects[3], s_staticTextBuf, "[R]");
-        C2D_DrawText(&s_textObjects[3], C2D_WithColor, 285, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[3], s_bottomTextBuf, "[R]");
+        C2D_DrawText(&s_bottomTexts[3], C2D_WithColor, 285, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
-        /* Render up to 4 search result item rows */
-        int startY = 38;
-        int rowHeight = 40;
-        for (int i = 0; i < 4 && i < s_searchResults.count; i++) {
-            VideoMetadata *vid = &s_searchResults.items[i];
-            u32 rowColor = (i == s_selectedResultIndex) ? COLOR_PANEL_ALT : COLOR_PANEL;
-            int y = startY + (i * (rowHeight + 3));
+        if (s_searchResults.count == 0) {
+            /* Draw helpful status panel when 0 results or connecting */
+            C2D_DrawRectSolid(10, 44, 0, 300, 160, COLOR_PANEL);
+            C2D_DrawRectSolid(10, 44, 0, 4, 160, COLOR_ACCENT);
 
-            C2D_DrawRectSolid(6, y, 0, 308, rowHeight, rowColor);
+            if (s_searchResults.isLoading) {
+                C2D_TextParse(&s_bottomTexts[4], s_bottomTextBuf, "Connecting to Invidious...");
+                C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 20, 56, 0, 0.44f, 0.44f, COLOR_ACCENT);
 
-            if (i == s_selectedResultIndex) {
-                C2D_DrawRectSolid(6, y, 0, 4, rowHeight, COLOR_ACCENT);
+                C2D_TextParse(&s_bottomTexts[5], s_bottomTextBuf, "Fetching video results, please wait...");
+                C2D_DrawText(&s_bottomTexts[5], C2D_WithColor, 20, 80, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
+            } else {
+                C2D_TextParse(&s_bottomTexts[4], s_bottomTextBuf, "Invidious Status:");
+                C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 20, 56, 0, 0.44f, 0.44f, COLOR_ACCENT);
+
+                char statusDetail[128];
+                if (s_searchResults.lastError[0] != '\0') {
+                    snprintf(statusDetail, sizeof(statusDetail), "%s", s_searchResults.lastError);
+                } else if (s_searchResults.lastHttpStatus > 0) {
+                    snprintf(statusDetail, sizeof(statusDetail), "Server returned HTTP %d", s_searchResults.lastHttpStatus);
+                } else {
+                    snprintf(statusDetail, sizeof(statusDetail), "0 videos found. Tap [R] to retry.");
+                }
+                C2D_TextParse(&s_bottomTexts[5], s_bottomTextBuf, statusDetail);
+                C2D_DrawText(&s_bottomTexts[5], C2D_WithColor, 20, 80, 0, 0.38f, 0.38f, COLOR_TEXT_WHITE);
+
+                C2D_TextParse(&s_bottomTexts[6], s_bottomTextBuf, "* Press (X) to cycle server instance");
+                C2D_DrawText(&s_bottomTexts[6], C2D_WithColor, 20, 110, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
+
+                C2D_TextParse(&s_bottomTexts[7], s_bottomTextBuf, "* Press (Y) to type custom server");
+                C2D_DrawText(&s_bottomTexts[7], C2D_WithColor, 20, 134, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
+
+                C2D_TextParse(&s_bottomTexts[8], s_bottomTextBuf, "* Touch tags [\"3ds\", \"homebrew\"] or [R]");
+                C2D_DrawText(&s_bottomTexts[8], C2D_WithColor, 20, 158, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
             }
+        } else {
+            /* Render up to 4 search result item rows */
+            int startY = 38;
+            int rowHeight = 40;
+            for (int i = 0; i < 4 && i < s_searchResults.count; i++) {
+                VideoMetadata *vid = &s_searchResults.items[i];
+                u32 rowColor = (i == s_selectedResultIndex) ? COLOR_PANEL_ALT : COLOR_PANEL;
+                int y = startY + (i * (rowHeight + 3));
 
-            /* Video Title */
-            C2D_TextParse(&s_textObjects[4 + (i * 2)], s_staticTextBuf, vid->title);
-            C2D_DrawText(&s_textObjects[4 + (i * 2)], C2D_WithColor, 16, y + 2, 0, 0.40f, 0.40f, COLOR_TEXT_WHITE);
+                C2D_DrawRectSolid(6, y, 0, 308, rowHeight, rowColor);
 
-            /* Subtitle: Author and length */
-            char rowSub[96];
-            snprintf(rowSub, sizeof(rowSub), "%s * %d:%02d * Touch to Play",
-                     vid->author, vid->lengthSeconds / 60, vid->lengthSeconds % 60);
-            C2D_TextParse(&s_textObjects[5 + (i * 2)], s_staticTextBuf, rowSub);
-            C2D_DrawText(&s_textObjects[5 + (i * 2)], C2D_WithColor, 16, y + 20, 0, 0.34f, 0.34f, COLOR_TEXT_MUTED);
+                if (i == s_selectedResultIndex) {
+                    C2D_DrawRectSolid(6, y, 0, 4, rowHeight, COLOR_ACCENT);
+                }
+
+                /* Video Title */
+                C2D_TextParse(&s_bottomTexts[4 + (i * 2)], s_bottomTextBuf, vid->title);
+                C2D_DrawText(&s_bottomTexts[4 + (i * 2)], C2D_WithColor, 16, y + 2, 0, 0.40f, 0.40f, COLOR_TEXT_WHITE);
+
+                /* Subtitle: Author and length */
+                char rowSub[96];
+                snprintf(rowSub, sizeof(rowSub), "%s * %d:%02d * Touch to Play",
+                         vid->author, vid->lengthSeconds / 60, vid->lengthSeconds % 60);
+                C2D_TextParse(&s_bottomTexts[5 + (i * 2)], s_bottomTextBuf, rowSub);
+                C2D_DrawText(&s_bottomTexts[5 + (i * 2)], C2D_WithColor, 16, y + 20, 0, 0.34f, 0.34f, COLOR_TEXT_MUTED);
+            }
         }
 
         /* Server Selection Bar at bottom (6, 212, 308, 24) */
@@ -478,8 +516,8 @@ static void render_bottom_screen(void) {
 
         char serverLabel[192];
         snprintf(serverLabel, sizeof(serverLabel), "Server: %s [Tap/X/Y]", s_currentHost);
-        C2D_TextParse(&s_textObjects[14], s_staticTextBuf, serverLabel);
-        C2D_DrawText(&s_textObjects[14], C2D_WithColor, 14, 216, 0, 0.36f, 0.36f, COLOR_TEXT_WHITE);
+        C2D_TextParse(&s_bottomTexts[16], s_bottomTextBuf, serverLabel);
+        C2D_DrawText(&s_bottomTexts[16], C2D_WithColor, 14, 216, 0, 0.36f, 0.36f, COLOR_TEXT_WHITE);
     }
 }
 
@@ -618,8 +656,9 @@ int main(int argc, char **argv) {
     C3D_RenderTarget *topTarget = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     C3D_RenderTarget *bottomTarget = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
 
-    /* Pre-allocate citro2d text buffer once to guarantee zero allocations in render loop */
-    s_staticTextBuf = C2D_TextBufNew(4096);
+    /* Pre-allocate separate citro2d text buffers for Top and Bottom screens */
+    s_topTextBuf = C2D_TextBufNew(4096);
+    s_bottomTextBuf = C2D_TextBufNew(4096);
 
     /* ------------------------------------------------------------------------
      * 2. 3DS SOC (Socket Service) and Network Initialization
@@ -725,10 +764,12 @@ int main(int argc, char **argv) {
 
         /* 1. Render Top Screen */
         C2D_SceneBegin(topTarget);
+        C2D_TargetClear(topTarget, COLOR_BG);
         render_top_screen();
 
         /* 2. Render Bottom Screen */
         C2D_SceneBegin(bottomTarget);
+        C2D_TargetClear(bottomTarget, COLOR_BG);
         render_bottom_screen();
 
         /* Swap framebuffers and present */
@@ -747,7 +788,8 @@ int main(int argc, char **argv) {
         s_socBuffer = NULL;
     }
 
-    C2D_TextBufDelete(s_staticTextBuf);
+    C2D_TextBufDelete(s_topTextBuf);
+    C2D_TextBufDelete(s_bottomTextBuf);
 
 cleanup_gfx:
     C2D_Fini();

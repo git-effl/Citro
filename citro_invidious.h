@@ -30,7 +30,7 @@ extern "C" {
 #define HTTP_RECV_BUF_SIZE   (256 * 1024) /* 256KB pre-allocated response buffer */
 
 /* Default public Invidious instance host (no API key required) */
-#define DEFAULT_INVIDIOUS_HOST "invidious.flokinet.to"
+#define DEFAULT_INVIDIOUS_HOST "invidious.f5.si"
 #define DEFAULT_INVIDIOUS_PORT 443
 
 /**
@@ -65,6 +65,9 @@ typedef struct {
     int           count;
     char          query[64];
     bool          isLoading;
+    int           lastHttpStatus;
+    Result        lastResultCode;
+    char          lastError[64];
 } SearchResults;
 
 /**

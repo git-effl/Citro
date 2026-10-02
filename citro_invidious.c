@@ -52,31 +52,57 @@ void invidious_exit(void) {
 /**
  * Perform a keyless HTTPS GET request to Invidious and store body in s_httpBuffer.
  */
-static int http_get_request(const char *url, char *out_buf, size_t max_len) {
+static int http_get_request(const char *url, char *out_buf, size_t max_len, int *out_status, Result *out_result) {
     httpcContext context;
     Result ret = 0;
     u32 statuscode = 0;
     u32 contentsize = 0;
 
-    /* Open HTTP GET context with SSL enabled (3DS handles TLS verification) */
+    if (out_status) *out_status = 0;
+    if (out_result) *out_result = 0;
+
+    /* Open HTTP GET context with SSL enabled */
     ret = httpcOpenContext(&context, HTTPC_METHOD_GET, (char *)url, 1);
     if (R_FAILED(ret)) {
+        if (out_result) *out_result = ret;
         return -1;
     }
 
-    /* Set common User-Agent header (Invidious instances appreciate non-blank UAs) */
-    httpcAddRequestHeaderField(&context, "User-Agent", "Citro-3DS-Client/1.0 (Nintendo 3DS Homebrew)");
-    httpcAddRequestHeaderField(&context, "Accept", "application/json");
+    /* Disable SSL certificate verification so Let's Encrypt and modern CA certs work on 3DS */
+    httpcSetSSLOpt(&context, SSLCOPT_DisableVerify);
+
+    /* Enable keep-alive to stabilize connections */
+    httpcSetKeepAlive(&context, HTTPC_KEEPALIVE_ENABLED);
+
+    /* Use browser User-Agent and headers to prevent server-side bot drops */
+    httpcAddRequestHeaderField(&context, "User-Agent", "Mozilla/5.0 (Nintendo 3DS; U; ; en) Version/1.7617.US");
+    httpcAddRequestHeaderField(&context, "Accept", "application/json, text/plain, */*");
+    httpcAddRequestHeaderField(&context, "Connection", "Keep-Alive");
 
     /* Begin request pipeline */
     ret = httpcBeginRequest(&context);
     if (R_FAILED(ret)) {
+        if (out_result) *out_result = ret;
         httpcCloseContext(&context);
         return -2;
     }
 
-    /* Verify HTTP response status (200 OK expected) */
+    /* Verify HTTP response status */
     ret = httpcGetResponseStatusCode(&context, &statuscode);
+    if (out_status) *out_status = (int)statuscode;
+    if (out_result) *out_result = ret;
+
+    /* Handle HTTP redirects (301, 302, 303, 307, 308) */
+    if (statuscode >= 301 && statuscode <= 308) {
+        char newUrl[512] = {0};
+        Result hRes = httpcGetResponseHeader(&context, "Location", newUrl, sizeof(newUrl));
+        httpcCloseContext(&context);
+        if (R_SUCCEEDED(hRes) && newUrl[0] != '\0') {
+            return http_get_request(newUrl, out_buf, max_len, out_status, out_result);
+        }
+        return -3;
+    }
+
     if (R_FAILED(ret) || statuscode != 200) {
         httpcCloseContext(&context);
         return -3;
@@ -94,6 +120,7 @@ static int http_get_request(const char *url, char *out_buf, size_t max_len) {
     size_t targetCap = (max_len - 1 < HTTP_RECV_BUF_SIZE) ? (max_len - 1) : (HTTP_RECV_BUF_SIZE - 1);
 
     do {
+        bytesRead = 0;
         ret = httpcDownloadData(&context, s_httpBuffer + totalBytes, targetCap - totalBytes, &bytesRead);
         totalBytes += bytesRead;
     } while (ret == (s32)HTTPC_RESULTCODE_DOWNLOADPENDING && totalBytes < targetCap);
@@ -113,6 +140,9 @@ int invidious_search(const char *host, const char *query, SearchResults *out_res
     if (!out_results) return -1;
     out_results->count = 0;
     out_results->isLoading = true;
+    out_results->lastHttpStatus = 0;
+    out_results->lastResultCode = 0;
+    out_results->lastError[0] = '\0';
 
     /* Build Invidious URL: https://<host>/api/v1/search?q=<query>&type=video */
     char url[512];
@@ -130,21 +160,39 @@ int invidious_search(const char *host, const char *query, SearchResults *out_res
     encodedQuery[eq_idx] = '\0';
     strncpy(out_results->query, query, sizeof(out_results->query) - 1);
 
-    snprintf(url, sizeof(url), "https://%s/api/v1/search?q=%s&type=video",
-             host ? host : DEFAULT_INVIDIOUS_HOST,
-             encodedQuery);
+    const char *actualHost = host ? host : DEFAULT_INVIDIOUS_HOST;
+    const char *scheme = "https://";
+    if (strncmp(actualHost, "http://", 7) == 0 || strncmp(actualHost, "https://", 8) == 0) {
+        scheme = "";
+    }
+
+    snprintf(url, sizeof(url), "%s%s/api/v1/search?q=%s&type=video",
+             scheme, actualHost, encodedQuery);
 
     /* Allocate temporary string for JSON processing */
     char *jsonPayload = (char *)malloc(HTTP_RECV_BUF_SIZE);
     if (!jsonPayload) {
         out_results->isLoading = false;
+        snprintf(out_results->lastError, sizeof(out_results->lastError), "Out of memory");
         return -1;
     }
 
-    int bytes = http_get_request(url, jsonPayload, HTTP_RECV_BUF_SIZE);
+    int bytes = http_get_request(url, jsonPayload, HTTP_RECV_BUF_SIZE,
+                                 &out_results->lastHttpStatus,
+                                 &out_results->lastResultCode);
     if (bytes <= 0) {
         free(jsonPayload);
         out_results->isLoading = false;
+        if (out_results->lastHttpStatus > 0 && out_results->lastHttpStatus != 200) {
+            snprintf(out_results->lastError, sizeof(out_results->lastError),
+                     "HTTP %d error", out_results->lastHttpStatus);
+        } else if (R_FAILED(out_results->lastResultCode)) {
+            snprintf(out_results->lastError, sizeof(out_results->lastError),
+                     "Net err: 0x%08lX", (unsigned long)out_results->lastResultCode);
+        } else {
+            snprintf(out_results->lastError, sizeof(out_results->lastError),
+                     "Server unreachable");
+        }
         return -2;
     }
 
@@ -152,6 +200,9 @@ int invidious_search(const char *host, const char *query, SearchResults *out_res
     free(jsonPayload);
 
     out_results->isLoading = false;
+    if (parsed == 0) {
+        snprintf(out_results->lastError, sizeof(out_results->lastError), "No video results found");
+    }
     return parsed;
 }
 
@@ -229,14 +280,19 @@ int invidious_fetch_video_details(const char *host, const char *videoId, VideoMe
     if (!videoId || !out_video) return -1;
 
     char url[512];
-    snprintf(url, sizeof(url), "https://%s/api/v1/videos/%s",
-             host ? host : DEFAULT_INVIDIOUS_HOST,
-             videoId);
+    const char *actualHost = host ? host : DEFAULT_INVIDIOUS_HOST;
+    const char *scheme = "https://";
+    if (strncmp(actualHost, "http://", 7) == 0 || strncmp(actualHost, "https://", 8) == 0) {
+        scheme = "";
+    }
+
+    snprintf(url, sizeof(url), "%s%s/api/v1/videos/%s",
+             scheme, actualHost, videoId);
 
     char *jsonPayload = (char *)malloc(HTTP_RECV_BUF_SIZE);
     if (!jsonPayload) return -1;
 
-    int bytes = http_get_request(url, jsonPayload, HTTP_RECV_BUF_SIZE);
+    int bytes = http_get_request(url, jsonPayload, HTTP_RECV_BUF_SIZE, NULL, NULL);
     if (bytes <= 0) {
         free(jsonPayload);
         return -2;
