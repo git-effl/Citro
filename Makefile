@@ -44,12 +44,17 @@ CFLAGS      += $(INCLUDE) -DARM11 -D__3DS__
 
 CXXFLAGS    := $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
+# Specs file path for 3DS homebrew
+SPECS       := $(CTRULIB)/lib/3ds.specs
+
 ASFLAGS     := -g $(ARCH)
-LDFLAGS     := -specs=3ds.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map) $(LIBPATHS)
+LDFLAGS     := -specs=$(SPECS) -g $(ARCH) $(LIBPATHS) -Wl,-Map,$(TARGET).map
 
 # Libraries needed: citro2d, citro3d, ctru, m
 LIBS        := -lcitro2d -lcitro3d -lctru -lm
 
+-include $(CTRULIB)/3ds_rules
+-include $(DEVKITPRO)/libctru/3ds_rules
 -include $(DEVKITARM)/3ds_rules
 
 #---------------------------------------------------------------------------------
@@ -66,6 +71,9 @@ APP_UNIQUE_ID   := 0x0CITR
 all: $(TARGET).3dsx
 
 $(TARGET).3dsx: $(TARGET).elf
+	@if command -v 3dsxtool >/dev/null 2>&1; then \
+		3dsxtool $< $@; \
+	fi
 
 $(TARGET).elf: main.o citro_invidious.o cJSON.o
 	$(CC) $(LDFLAGS) $^ $(LIBS) -o $@
