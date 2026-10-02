@@ -19,6 +19,8 @@ extern "C"
 #define cJSON_Array  (1 << 5)
 #define cJSON_Object (1 << 6)
 #define cJSON_Raw    (1 << 7)
+#define cJSON_IsReference 256
+#define cJSON_StringIsConst 512
 
 typedef struct cJSON
 {

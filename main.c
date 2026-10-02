@@ -233,7 +233,7 @@ static void render_top_screen(void) {
         C2D_DrawText(&s_textObjects[0], C2D_WithColor, 20, 10, 0, 0.65f, 0.65f, COLOR_TEXT_WHITE);
 
         /* Query Info */
-        char searchInfo[128];
+        char searchInfo[256];
         snprintf(searchInfo, sizeof(searchInfo), "Query: \"%s\" (%d results from %s)",
                  s_searchResults.query, s_searchResults.count, s_currentHost);
         C2D_TextParse(&s_textObjects[1], s_staticTextBuf, searchInfo);
@@ -476,7 +476,7 @@ static void render_bottom_screen(void) {
         C2D_DrawRectSolid(6, 212, 0, 308, 24, COLOR_PANEL);
         C2D_DrawRectSolid(6, 212, 0, 3, 24, COLOR_ACCENT);
 
-        char serverLabel[96];
+        char serverLabel[192];
         snprintf(serverLabel, sizeof(serverLabel), "Server: %s [Tap/X/Y]", s_currentHost);
         C2D_TextParse(&s_textObjects[14], s_staticTextBuf, serverLabel);
         C2D_DrawText(&s_textObjects[14], C2D_WithColor, 14, 216, 0, 0.36f, 0.36f, COLOR_TEXT_WHITE);
