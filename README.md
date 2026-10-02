@@ -67,8 +67,9 @@ Citro is distributed under GPL3,Other License would be used for the project.
 1. **Primary License**: [GNU General Public License v3.0 (GPL-3.0)](LICENSE)
 2. **Material 3**: [Apache License 2.0 (Apache-2.0)](LICENSE-2)
 3. **Material 3**: [Creative Commons Attribution 4.0 International(CC-BY 4.0)](LICENSE-3)
-4. **Ubuntu**: [Ubuntu Font License](FONT-LICENSE-1) (There are also multiple files under FONT-LICENSE-1,these are Copyright,Trademarks,FAQ,Contributing and Fontlog.)
-5. **Andika**: [Sil Open Font License](FONT-LICENSE-2)
+4. **Invidious**: [Gnu Affero General Public License v3.0 (AGPL-3.0)](LICENSE-4)
+5. **Ubuntu**: [Ubuntu Font License](FONT-LICENSE-1) (There are also multiple files under FONT-LICENSE-1,these are Copyright,Trademarks,FAQ,Contributing and Fontlog.)
+6. **Andika**: [Sil Open Font License](FONT-LICENSE-2)
 
 
 
