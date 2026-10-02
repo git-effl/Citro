@@ -65,6 +65,59 @@ static BatteryStatus  s_battery = { .level = 5, .percent = 100, .isCharging = fa
 static int            s_selectedResultIndex = 0;
 static int           s_descScrollOffset = 0;
 
+/* Invidious Server Presets & Configurable Instance Host */
+static const char *s_serverPresets[] = {
+    "invidious.flokinet.to",
+    "yewtu.be",
+    "inv.nadeko.net",
+    "vid.puffyan.us",
+    "invidious.nerdvpn.de"
+};
+#define NUM_SERVER_PRESETS (int)(sizeof(s_serverPresets) / sizeof(s_serverPresets[0]))
+static int  s_currentServerIndex = 0;
+static char s_currentHost[128] = "invidious.flokinet.to";
+
+/**
+ * Cycle to the next preset Invidious instance host.
+ */
+static void cycle_invidious_server(void) {
+    s_currentServerIndex = (s_currentServerIndex + 1) % NUM_SERVER_PRESETS;
+    snprintf(s_currentHost, sizeof(s_currentHost), "%s", s_serverPresets[s_currentServerIndex]);
+    invidious_search(s_currentHost, s_searchResults.query[0] ? s_searchResults.query : "3ds", &s_searchResults);
+}
+
+/**
+ * Prompt user for a custom Invidious instance host via 3DS Software Keyboard (swkbd).
+ */
+static void prompt_custom_server(void) {
+    SwkbdState swkbd;
+    char inputBuf[128] = {0};
+
+    swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, -1);
+    swkbdSetValidation(&swkbd, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+    swkbdSetHintText(&swkbd, "Enter Invidious Host (e.g. yewtu.be)");
+    swkbdSetInitialText(&swkbd, s_currentHost);
+
+    SwkbdButton button = swkbdInputText(&swkbd, inputBuf, sizeof(inputBuf));
+    if (button != SWKBD_BUTTON_NONE && inputBuf[0] != '\0') {
+        char *hostStart = inputBuf;
+        if (strncmp(hostStart, "https://", 8) == 0) hostStart += 8;
+        else if (strncmp(hostStart, "http://", 7) == 0) hostStart += 7;
+
+        size_t len = strlen(hostStart);
+        while (len > 0 && (hostStart[len - 1] == '/' || hostStart[len - 1] == ' ' || hostStart[len - 1] == '\r' || hostStart[len - 1] == '\n')) {
+            hostStart[len - 1] = '\0';
+            len--;
+        }
+
+        if (len > 0) {
+            snprintf(s_currentHost, sizeof(s_currentHost), "%s", hostStart);
+            s_currentServerIndex = -1;
+            invidious_search(s_currentHost, s_searchResults.query[0] ? s_searchResults.query : "3ds", &s_searchResults);
+        }
+    }
+}
+
 /**
  * Helper: Check if touch coordinates fall within a rectangular button area.
  */
@@ -90,7 +143,7 @@ static void launch_video(const VideoMetadata *video) {
     s_appState = STATE_PLAYBACK;
 
     /* Fetch full description and likes asynchronously or on demand */
-    invidious_fetch_video_details(DEFAULT_INVIDIOUS_HOST, video->videoId, &s_playback.currentVideo);
+    invidious_fetch_video_details(s_currentHost, video->videoId, &s_playback.currentVideo);
 }
 
 /**
@@ -182,7 +235,7 @@ static void render_top_screen(void) {
         /* Query Info */
         char searchInfo[128];
         snprintf(searchInfo, sizeof(searchInfo), "Query: \"%s\" (%d results from %s)",
-                 s_searchResults.query, s_searchResults.count, DEFAULT_INVIDIOUS_HOST);
+                 s_searchResults.query, s_searchResults.count, s_currentHost);
         C2D_TextParse(&s_textObjects[1], s_staticTextBuf, searchInfo);
         C2D_TextOptimize(&s_textObjects[1]);
         C2D_DrawText(&s_textObjects[1], C2D_WithColor, 20, 50, 0, 0.45f, 0.45f, COLOR_ACCENT);
@@ -191,10 +244,10 @@ static void render_top_screen(void) {
         C2D_TextParse(&s_textObjects[2], s_staticTextBuf, "* Touch bottom screen to select a video or use quick tags");
         C2D_DrawText(&s_textObjects[2], C2D_WithColor, 20, 80, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
 
-        C2D_TextParse(&s_textObjects[3], s_staticTextBuf, "* Press (A) to play selected video, (START) to exit");
+        C2D_TextParse(&s_textObjects[3], s_staticTextBuf, "* (X) Cycle Server | (Y) Custom Server | (A) Play Video");
         C2D_DrawText(&s_textObjects[3], C2D_WithColor, 20, 105, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
 
-        C2D_TextParse(&s_textObjects[4], s_staticTextBuf, "* No API keys or Google accounts needed (Pure Invidious API)");
+        C2D_TextParse(&s_textObjects[4], s_staticTextBuf, "* Pure Invidious API • Open Protocol Streaming");
         C2D_DrawText(&s_textObjects[4], C2D_WithColor, 20, 130, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
 
         /* Selected Video Preview Box */
@@ -394,8 +447,8 @@ static void render_bottom_screen(void) {
         C2D_DrawText(&s_textObjects[3], C2D_WithColor, 285, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Render up to 4 search result item rows */
-        int startY = 42;
-        int rowHeight = 46;
+        int startY = 38;
+        int rowHeight = 40;
         for (int i = 0; i < 4 && i < s_searchResults.count; i++) {
             VideoMetadata *vid = &s_searchResults.items[i];
             u32 rowColor = (i == s_selectedResultIndex) ? COLOR_PANEL_ALT : COLOR_PANEL;
@@ -409,15 +462,24 @@ static void render_bottom_screen(void) {
 
             /* Video Title */
             C2D_TextParse(&s_textObjects[4 + (i * 2)], s_staticTextBuf, vid->title);
-            C2D_DrawText(&s_textObjects[4 + (i * 2)], C2D_WithColor, 16, y + 4, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+            C2D_DrawText(&s_textObjects[4 + (i * 2)], C2D_WithColor, 16, y + 2, 0, 0.40f, 0.40f, COLOR_TEXT_WHITE);
 
             /* Subtitle: Author and length */
             char rowSub[96];
             snprintf(rowSub, sizeof(rowSub), "%s * %d:%02d * Touch to Play",
                      vid->author, vid->lengthSeconds / 60, vid->lengthSeconds % 60);
             C2D_TextParse(&s_textObjects[5 + (i * 2)], s_staticTextBuf, rowSub);
-            C2D_DrawText(&s_textObjects[5 + (i * 2)], C2D_WithColor, 16, y + 24, 0, 0.36f, 0.36f, COLOR_TEXT_MUTED);
+            C2D_DrawText(&s_textObjects[5 + (i * 2)], C2D_WithColor, 16, y + 20, 0, 0.34f, 0.34f, COLOR_TEXT_MUTED);
         }
+
+        /* Server Selection Bar at bottom (6, 212, 308, 24) */
+        C2D_DrawRectSolid(6, 212, 0, 308, 24, COLOR_PANEL);
+        C2D_DrawRectSolid(6, 212, 0, 3, 24, COLOR_ACCENT);
+
+        char serverLabel[96];
+        snprintf(serverLabel, sizeof(serverLabel), "Server: %s [Tap/X/Y]", s_currentHost);
+        C2D_TextParse(&s_textObjects[14], s_staticTextBuf, serverLabel);
+        C2D_DrawText(&s_textObjects[14], C2D_WithColor, 14, 216, 0, 0.36f, 0.36f, COLOR_TEXT_WHITE);
     }
 }
 
@@ -499,25 +561,25 @@ static void handle_touch_input(touchPosition touch) {
     } else {
         /* STATE_SEARCH: Quick tags */
         if (is_touch_inside(touch, 8, 6, 70, 24)) {
-            invidious_search(DEFAULT_INVIDIOUS_HOST, "3ds", &s_searchResults);
+            invidious_search(s_currentHost, "3ds", &s_searchResults);
             return;
         }
         if (is_touch_inside(touch, 84, 6, 95, 24)) {
-            invidious_search(DEFAULT_INVIDIOUS_HOST, "homebrew", &s_searchResults);
+            invidious_search(s_currentHost, "homebrew", &s_searchResults);
             return;
         }
         if (is_touch_inside(touch, 185, 6, 85, 24)) {
-            invidious_search(DEFAULT_INVIDIOUS_HOST, "chiptune", &s_searchResults);
+            invidious_search(s_currentHost, "chiptune", &s_searchResults);
             return;
         }
         if (is_touch_inside(touch, 275, 6, 38, 24)) {
-            invidious_search(DEFAULT_INVIDIOUS_HOST, s_searchResults.query, &s_searchResults);
+            invidious_search(s_currentHost, s_searchResults.query, &s_searchResults);
             return;
         }
 
         /* Select video item from touch list */
-        int startY = 42;
-        int rowHeight = 46;
+        int startY = 38;
+        int rowHeight = 40;
         for (int i = 0; i < 4 && i < s_searchResults.count; i++) {
             int y = startY + (i * (rowHeight + 3));
             if (is_touch_inside(touch, 6, y, 308, rowHeight)) {
@@ -525,6 +587,12 @@ static void handle_touch_input(touchPosition touch) {
                 launch_video(&s_searchResults.items[i]);
                 return;
             }
+        }
+
+        /* Touch on Server bar (6, 212, 308, 24): prompt custom server or cycle */
+        if (is_touch_inside(touch, 6, 212, 308, 24)) {
+            prompt_custom_server();
+            return;
         }
     }
 }
@@ -584,7 +652,7 @@ int main(int argc, char **argv) {
     memset(&s_playback, 0, sizeof(PlaybackState));
 
     /* Query public Invidious instance without API keys */
-    invidious_search(DEFAULT_INVIDIOUS_HOST, "3ds", &s_searchResults);
+    invidious_search(s_currentHost, "3ds", &s_searchResults);
 
     /* ------------------------------------------------------------------------
      * 4. Main Event & Render Loop (Locked to 60 FPS VSync)
@@ -597,6 +665,14 @@ int main(int argc, char **argv) {
         /* Exit application on START button press */
         if (kDown & KEY_START) {
             break;
+        }
+
+        /* Server Switching via hardware buttons */
+        if (kDown & KEY_X) {
+            cycle_invidious_server();
+        }
+        if (kDown & KEY_Y) {
+            prompt_custom_server();
         }
 
         /* Handle physical D-pad navigation */

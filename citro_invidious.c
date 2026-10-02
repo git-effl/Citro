@@ -281,7 +281,7 @@ Result citro_battery_update(BatteryStatus *status) {
 
     u8 level = 5;
     u8 charge = 0;
-    u8 adapter = 0;
+    bool adapter = false;
 
     Result res = PTMU_GetBatteryLevel(&level);
     if (R_SUCCEEDED(res)) {
@@ -309,7 +309,7 @@ Result citro_battery_update(BatteryStatus *status) {
     }
 
     if (R_SUCCEEDED(PTMU_GetAdapterState(&adapter))) {
-        status->isAdapterPlugged = (adapter != 0);
+        status->isAdapterPlugged = adapter;
     } else {
         status->isAdapterPlugged = false;
     }
