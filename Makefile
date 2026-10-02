@@ -44,8 +44,8 @@ CFLAGS      += $(INCLUDE) -DARM11 -D__3DS__
 
 CXXFLAGS    := $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
-# Specs file path for 3DS homebrew
-SPECS       := $(CTRULIB)/lib/3ds.specs
+# Specs file for 3DS homebrew (.3dsx format)
+SPECS       := 3dsx.specs
 
 ASFLAGS     := -g $(ARCH)
 LDFLAGS     := -specs=$(SPECS) -g $(ARCH) $(LIBPATHS) -Wl,-Map,$(TARGET).map
