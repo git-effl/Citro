@@ -154,6 +154,7 @@ static void launch_video(const VideoMetadata *video) {
 static void render_top_screen(void) {
     /* Clear top background */
     C2D_DrawRectSolid(0, 0, 0, SCREEN_TOP_WIDTH, SCREEN_TOP_HEIGHT, COLOR_BG);
+    C2D_TextBufClear(s_topTextBuf);
 
     if (s_appState == STATE_PLAYBACK || s_appState == STATE_COMMENTS) {
         /* Render simulated video playback viewport (400x200 16:9 box) */
@@ -294,12 +295,11 @@ static void render_top_screen(void) {
     }
 
     /* Render percentage / charging text */
-    C2D_TextBufClear(s_staticTextBuf);
     char batStr[24];
     snprintf(batStr, sizeof(batStr), "%s%d%%", s_battery.isCharging ? "+" : "", s_battery.percent);
-    C2D_TextParse(&s_textObjects[7], s_staticTextBuf, batStr);
-    C2D_TextOptimize(&s_textObjects[7]);
-    C2D_DrawText(&s_textObjects[7], C2D_WithColor, bx - 38, by + 1, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
+    C2D_TextParse(&s_topTexts[7], s_topTextBuf, batStr);
+    C2D_TextOptimize(&s_topTexts[7]);
+    C2D_DrawText(&s_topTexts[7], C2D_WithColor, bx - 38, by + 1, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
 }
 
 /**
