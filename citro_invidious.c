@@ -180,12 +180,25 @@ int invidious_search(const char *host, const char *query, SearchResults *out_res
     int bytes = http_get_request(url, jsonPayload, HTTP_RECV_BUF_SIZE,
                                  &out_results->lastHttpStatus,
                                  &out_results->lastResultCode);
+
+    /* If HTTPS fails with 0xD8A0A03C (TLS/SSL certificate failure), attempt automatic fallback to plain HTTP */
+    if (bytes <= 0 && (u32)out_results->lastResultCode == 0xD8A0A03C && strncmp(url, "https://", 8) == 0) {
+        char fallbackUrl[512];
+        snprintf(fallbackUrl, sizeof(fallbackUrl), "http://%s", url + 8);
+        bytes = http_get_request(fallbackUrl, jsonPayload, HTTP_RECV_BUF_SIZE,
+                                 &out_results->lastHttpStatus,
+                                 &out_results->lastResultCode);
+    }
+
     if (bytes <= 0) {
         free(jsonPayload);
         out_results->isLoading = false;
         if (out_results->lastHttpStatus > 0 && out_results->lastHttpStatus != 200) {
             snprintf(out_results->lastError, sizeof(out_results->lastError),
                      "HTTP %d error", out_results->lastHttpStatus);
+        } else if ((u32)out_results->lastResultCode == 0xD8A0A03C) {
+            snprintf(out_results->lastError, sizeof(out_results->lastError),
+                     "TLS cert err: Check 3DS Date/Time or use HTTP");
         } else if (R_FAILED(out_results->lastResultCode)) {
             snprintf(out_results->lastError, sizeof(out_results->lastError),
                      "Net err: 0x%08lX", (unsigned long)out_results->lastResultCode);
