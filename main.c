@@ -59,6 +59,67 @@ static C2D_TextBuf s_bottomTextBuf;
 static C2D_Text s_topTexts[16];
 static C2D_Text s_bottomTexts[24];
 
+/* Custom TTF & Material Icon Fonts for 3DS Graphics Pipeline */
+static C2D_Font s_fontUbuntuRegular = NULL;
+static C2D_Font s_fontUbuntuBold    = NULL;
+static C2D_Font s_fontAndikaRegular = NULL;
+static C2D_Font s_fontAndikaBold    = NULL;
+static C2D_Font s_fontMaterialIcons = NULL;
+
+/* Material Icons Unicode Glyphs (from icons/MaterialIcons-Regular.ttf) */
+#define ICON_PLAY               "\xEE\x80\xB7"  /* U+E037: play_arrow */
+#define ICON_PAUSE              "\xEE\x80\xB4"  /* U+E034: pause */
+#define ICON_SEARCH             "\xEE\xA2\xB6"  /* U+E8B6: search */
+#define ICON_THUMB_UP           "\xEE\xA3\x9C"  /* U+E8DC: thumb_up */
+#define ICON_FORWARD_10         "\xEE\x81\x96"  /* U+E056: forward_10 */
+#define ICON_REPLAY_10          "\xEE\x81\x99"  /* U+E059: replay_10 */
+#define ICON_REFRESH            "\xEE\x97\x95"  /* U+E5D5: refresh */
+#define ICON_INFO               "\xEE\xA2\x8E"  /* U+E88E: info */
+#define ICON_TV                 "\xEE\x8C\xB3"  /* U+E333: tv */
+#define ICON_CODE               "\xEE\xA1\xAF"  /* U+E86F: code / terminal */
+#define ICON_DNS                "\xEE\xA1\xB5"  /* U+E875: dns */
+#define ICON_ARROW_UP           "\xEE\x8C\x96"  /* U+E316: keyboard_arrow_up */
+#define ICON_ARROW_DOWN         "\xEE\x8C\x93"  /* U+E313: keyboard_arrow_down */
+#define ICON_BATTERY_FULL       "\xEE\x86\xA4"  /* U+E1A4: battery_std */
+#define ICON_BATTERY_CHARGING   "\xEE\x86\xA3"  /* U+E1A3: battery_charging_full */
+
+/**
+ * Safely parse text with a custom C2D_Font, falling back to 3DS system font if font is NULL.
+ */
+static inline void parse_text_font(C2D_Text *text, C2D_Font font, C2D_TextBuf buf, const char *str) {
+    if (font) {
+        C2D_TextFontParse(text, font, buf, str);
+    } else {
+        C2D_TextParse(text, buf, str);
+    }
+    C2D_TextOptimize(text);
+}
+
+/**
+ * Load a font file checking RomFS, local project folder, and SDMC.
+ */
+static C2D_Font load_3ds_font(const char *subfolder, const char *filename) {
+    char path[128];
+    C2D_Font font = NULL;
+
+    /* 1. Try RomFS virtual archive */
+    snprintf(path, sizeof(path), "romfs:/%s/%s", subfolder, filename);
+    font = C2D_FontLoad(path);
+    if (font) return font;
+
+    /* 2. Try relative folder in local working directory */
+    snprintf(path, sizeof(path), "%s/%s", subfolder, filename);
+    font = C2D_FontLoad(path);
+    if (font) return font;
+
+    /* 3. Try SDMC application directory (sdmc:/3ds/Citro/...) */
+    snprintf(path, sizeof(path), "sdmc:/3ds/Citro/%s/%s", subfolder, filename);
+    font = C2D_FontLoad(path);
+    if (font) return font;
+
+    return NULL;
+}
+
 /* Global Application State */
 static AppState       s_appState = STATE_SEARCH;
 static SearchResults  s_searchResults;
@@ -173,12 +234,10 @@ static void render_top_screen(void) {
         C2D_DrawRectSolid(20, 206, 0, (int)(360.0f * progress), 4, COLOR_SEEK_FILL);
 
         /* Center Video ID & Channel info */
-        C2D_TextBufClear(s_topTextBuf);
         char topInfoStr[128];
         snprintf(topInfoStr, sizeof(topInfoStr), "Channel: %s | ID: %s",
                  s_playback.currentVideo.author, s_playback.currentVideo.videoId);
-        C2D_TextParse(&s_topTexts[0], s_topTextBuf, topInfoStr);
-        C2D_TextOptimize(&s_topTexts[0]);
+        parse_text_font(&s_topTexts[0], s_fontUbuntuRegular, s_topTextBuf, topInfoStr);
         C2D_DrawText(&s_topTexts[0], C2D_WithColor, 30, 180, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
 
         /* --------------------------------------------------------------------
@@ -204,20 +263,18 @@ static void render_top_screen(void) {
                 C2D_DrawRectSolid(20, 10, 0, 360, 48, C2D_Color32(10, 10, 16, alphaByte));
                 C2D_DrawRectSolid(20, 56, 0, 360, 2, C2D_Color32(230, 33, 23, alphaByte));
 
-                /* Video Title */
-                C2D_TextParse(&s_topTexts[2], s_topTextBuf, s_playback.currentVideo.title);
-                C2D_TextOptimize(&s_topTexts[2]);
+                /* Video Title (rendered with Andika Bold TTF) */
+                parse_text_font(&s_topTexts[2], s_fontAndikaBold, s_topTextBuf, s_playback.currentVideo.title);
                 C2D_DrawText(&s_topTexts[2], C2D_WithColor, 28, 16, 0, 0.52f, 0.52f,
                              C2D_Color32(255, 255, 255, textAlpha));
 
-                /* Author and duration */
+                /* Author and duration (rendered with Ubuntu Regular TTF) */
                 char bannerSubStr[96];
                 int mins = s_playback.currentVideo.lengthSeconds / 60;
                 int secs = s_playback.currentVideo.lengthSeconds % 60;
                 snprintf(bannerSubStr, sizeof(bannerSubStr), "%s * %02d:%02d",
                          s_playback.currentVideo.author, mins, secs);
-                C2D_TextParse(&s_topTexts[3], s_topTextBuf, bannerSubStr);
-                C2D_TextOptimize(&s_topTexts[3]);
+                parse_text_font(&s_topTexts[3], s_fontUbuntuRegular, s_topTextBuf, bannerSubStr);
                 C2D_DrawText(&s_topTexts[3], C2D_WithColor, 28, 36, 0, 0.42f, 0.42f,
                              C2D_Color32(200, 200, 210, textAlpha));
             } else {
@@ -229,27 +286,25 @@ static void render_top_screen(void) {
         C2D_DrawRectSolid(0, 0, 0, SCREEN_TOP_WIDTH, 40, COLOR_PANEL);
         C2D_DrawRectSolid(0, 38, 0, SCREEN_TOP_WIDTH, 2, COLOR_ACCENT);
 
-        C2D_TextBufClear(s_topTextBuf);
-        C2D_TextParse(&s_topTexts[0], s_topTextBuf, "Citro 3DS - Invidious YouTube Client");
-        C2D_TextOptimize(&s_topTexts[0]);
+        /* Main Header Title (rendered with Andika Bold TTF) */
+        parse_text_font(&s_topTexts[0], s_fontAndikaBold, s_topTextBuf, "Citro 3DS - Invidious YouTube Client");
         C2D_DrawText(&s_topTexts[0], C2D_WithColor, 20, 10, 0, 0.65f, 0.65f, COLOR_TEXT_WHITE);
 
-        /* Query Info */
+        /* Query Info (rendered with Ubuntu Regular TTF) */
         char searchInfo[256];
         snprintf(searchInfo, sizeof(searchInfo), "Query: \"%s\" (%d results from %s)",
                  s_searchResults.query, s_searchResults.count, s_currentHost);
-        C2D_TextParse(&s_topTexts[1], s_topTextBuf, searchInfo);
-        C2D_TextOptimize(&s_topTexts[1]);
+        parse_text_font(&s_topTexts[1], s_fontUbuntuRegular, s_topTextBuf, searchInfo);
         C2D_DrawText(&s_topTexts[1], C2D_WithColor, 20, 50, 0, 0.45f, 0.45f, COLOR_ACCENT);
 
-        /* Instructions list */
-        C2D_TextParse(&s_topTexts[2], s_topTextBuf, "* Touch bottom screen to select a video or use quick tags");
+        /* Instructions list (rendered with Ubuntu Regular TTF) */
+        parse_text_font(&s_topTexts[2], s_fontUbuntuRegular, s_topTextBuf, "* Touch bottom screen to select a video or use quick tags");
         C2D_DrawText(&s_topTexts[2], C2D_WithColor, 20, 80, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
 
-        C2D_TextParse(&s_topTexts[3], s_topTextBuf, "* (X) Cycle Server | (Y) Custom Server | (A) Play Video");
+        parse_text_font(&s_topTexts[3], s_fontUbuntuRegular, s_topTextBuf, "* (X) Cycle Server | (Y) Custom Server | (A) Play Video");
         C2D_DrawText(&s_topTexts[3], C2D_WithColor, 20, 105, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
 
-        C2D_TextParse(&s_topTexts[4], s_topTextBuf, "* Pure Invidious API • Open Protocol Streaming");
+        parse_text_font(&s_topTexts[4], s_fontUbuntuRegular, s_topTextBuf, "* Pure Invidious API • Open Protocol Streaming");
         C2D_DrawText(&s_topTexts[4], C2D_WithColor, 20, 130, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
 
         /* Selected Video Preview Box */
@@ -258,13 +313,15 @@ static void render_top_screen(void) {
             C2D_DrawRectSolid(20, 160, 0, 360, 68, COLOR_PANEL);
             C2D_DrawRectSolid(20, 160, 0, 3, 68, COLOR_ACCENT);
 
-            C2D_TextParse(&s_topTexts[5], s_topTextBuf, preview->title);
+            /* Preview Title with Andika Bold TTF */
+            parse_text_font(&s_topTexts[5], s_fontAndikaBold, s_topTextBuf, preview->title);
             C2D_DrawText(&s_topTexts[5], C2D_WithColor, 30, 166, 0, 0.50f, 0.50f, COLOR_TEXT_WHITE);
 
+            /* Preview Subtitle with Ubuntu Regular TTF */
             char sub[128];
             snprintf(sub, sizeof(sub), "By %s | %d mins | %" PRId64 " views",
                      preview->author, preview->lengthSeconds / 60, preview->viewCount);
-            C2D_TextParse(&s_topTexts[6], s_topTextBuf, sub);
+            parse_text_font(&s_topTexts[6], s_fontUbuntuRegular, s_topTextBuf, sub);
             C2D_DrawText(&s_topTexts[6], C2D_WithColor, 30, 192, 0, 0.42f, 0.42f, COLOR_TEXT_MUTED);
         }
     }
@@ -294,11 +351,10 @@ static void render_top_screen(void) {
         C2D_DrawRectSolid(bx + 2, by + 2, 0, fillWidth, 10, batColor);
     }
 
-    /* Render percentage / charging text */
+    /* Render percentage / charging text (rendered with Ubuntu Regular TTF) */
     char batStr[24];
     snprintf(batStr, sizeof(batStr), "%s%d%%", s_battery.isCharging ? "+" : "", s_battery.percent);
-    C2D_TextParse(&s_topTexts[7], s_topTextBuf, batStr);
-    C2D_TextOptimize(&s_topTexts[7]);
+    parse_text_font(&s_topTexts[7], s_fontUbuntuRegular, s_topTextBuf, batStr);
     C2D_DrawText(&s_topTexts[7], C2D_WithColor, bx - 38, by + 1, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
 }
 
@@ -319,29 +375,32 @@ static void render_bottom_screen(void) {
 
         /* "< Search" Back Button: (10, 5, 80, 24) */
         C2D_DrawRectSolid(8, 5, 0, 75, 24, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_bottomTexts[0], s_bottomTextBuf, "< Search");
+        parse_text_font(&s_bottomTexts[0], s_fontUbuntuBold, s_bottomTextBuf, "< Search");
         C2D_DrawText(&s_bottomTexts[0], C2D_WithColor, 14, 9, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
-        /* Likes display with thumb icon: (180, 5, 130, 24) */
-        char likesStr[32];
+        /* Likes display with Material Icon thumb_up: (180, 5, 130, 24) */
+        char likesStr[64];
         if (s_playback.currentVideo.likeCount > 0) {
-            snprintf(likesStr, sizeof(likesStr), "[+] %ld Likes", (long)s_playback.currentVideo.likeCount);
+            snprintf(likesStr, sizeof(likesStr), "%s %ld Likes",
+                     s_fontMaterialIcons ? ICON_THUMB_UP : "[+]",
+                     (long)s_playback.currentVideo.likeCount);
         } else {
-            snprintf(likesStr, sizeof(likesStr), "[+] Like Video");
+            snprintf(likesStr, sizeof(likesStr), "%s Like Video",
+                     s_fontMaterialIcons ? ICON_THUMB_UP : "[+]");
         }
         C2D_DrawRectSolid(200, 5, 0, 112, 24, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_bottomTexts[1], s_bottomTextBuf, likesStr);
+        parse_text_font(&s_bottomTexts[1], s_fontUbuntuBold, s_bottomTextBuf, likesStr);
         C2D_DrawText(&s_bottomTexts[1], C2D_WithColor, 208, 9, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
-        /* Video Title on Touch Screen */
-        C2D_TextParse(&s_bottomTexts[2], s_bottomTextBuf, s_playback.currentVideo.title);
+        /* Video Title on Touch Screen (Andika Bold TTF) */
+        parse_text_font(&s_bottomTexts[2], s_fontAndikaBold, s_bottomTextBuf, s_playback.currentVideo.title);
         C2D_DrawText(&s_bottomTexts[2], C2D_WithColor, 10, 42, 0, 0.46f, 0.46f, COLOR_TEXT_WHITE);
 
-        /* Author and Views */
+        /* Author and Views (Ubuntu Regular TTF) */
         char metaStr[96];
         snprintf(metaStr, sizeof(metaStr), "%s * %" PRId64 " views",
                  s_playback.currentVideo.author, s_playback.currentVideo.viewCount);
-        C2D_TextParse(&s_bottomTexts[3], s_bottomTextBuf, metaStr);
+        parse_text_font(&s_bottomTexts[3], s_fontUbuntuRegular, s_bottomTextBuf, metaStr);
         C2D_DrawText(&s_bottomTexts[3], C2D_WithColor, 10, 62, 0, 0.40f, 0.40f, COLOR_TEXT_MUTED);
 
         /* --------------------------------------------------------------------
@@ -365,31 +424,41 @@ static void render_bottom_screen(void) {
         int totM = s_playback.currentVideo.lengthSeconds / 60;
         int totS = s_playback.currentVideo.lengthSeconds % 60;
         snprintf(timeStr, sizeof(timeStr), "%02d:%02d / %02d:%02d", curM, curS, totM, totS);
-        C2D_TextParse(&s_bottomTexts[4], s_bottomTextBuf, timeStr);
+        parse_text_font(&s_bottomTexts[4], s_fontUbuntuRegular, s_bottomTextBuf, timeStr);
         C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 20, 112, 0, 0.40f, 0.40f, COLOR_TEXT_MUTED);
 
         /* --------------------------------------------------------------------
-         * Touch Transport Controls
+         * Touch Transport Controls (with Material Icons TTF)
          * -------------------------------------------------------------------- */
         /* Rewind 10s: (20, 140, 60, 42) */
         C2D_DrawRectSolid(20, 140, 0, 60, 42, COLOR_PANEL);
-        C2D_TextParse(&s_bottomTexts[5], s_bottomTextBuf, "-10s");
-        C2D_DrawText(&s_bottomTexts[5], C2D_WithColor, 35, 152, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
+        const char *rewindLabel = s_fontMaterialIcons ? ICON_REPLAY_10 " 10s" : "-10s";
+        parse_text_font(&s_bottomTexts[5], s_fontUbuntuBold, s_bottomTextBuf, rewindLabel);
+        C2D_DrawText(&s_bottomTexts[5], C2D_WithColor, 26, 152, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Big Play/Pause Button: (95, 135, 130, 52) */
         C2D_DrawRectSolid(95, 135, 0, 130, 52, s_playback.isPlaying ? COLOR_ACCENT : COLOR_BUTTON_BLUE);
-        const char *btnLabel = s_playback.isPlaying ? "PAUSE [||]" : "PLAY [>]";
-        C2D_TextParse(&s_bottomTexts[6], s_bottomTextBuf, btnLabel);
-        C2D_DrawText(&s_bottomTexts[6], C2D_WithColor, 122, 150, 0, 0.55f, 0.55f, COLOR_TEXT_WHITE);
+        char btnLabel[64];
+        if (s_fontMaterialIcons) {
+            snprintf(btnLabel, sizeof(btnLabel), "%s %s",
+                     s_playback.isPlaying ? ICON_PAUSE : ICON_PLAY,
+                     s_playback.isPlaying ? "PAUSE" : "PLAY");
+        } else {
+            snprintf(btnLabel, sizeof(btnLabel), "%s",
+                     s_playback.isPlaying ? "PAUSE [||]" : "PLAY [>]");
+        }
+        parse_text_font(&s_bottomTexts[6], s_fontUbuntuBold, s_bottomTextBuf, btnLabel);
+        C2D_DrawText(&s_bottomTexts[6], C2D_WithColor, 116, 150, 0, 0.52f, 0.52f, COLOR_TEXT_WHITE);
 
         /* Fast Forward 10s: (240, 140, 60, 42) */
         C2D_DrawRectSolid(240, 140, 0, 60, 42, COLOR_PANEL);
-        C2D_TextParse(&s_bottomTexts[7], s_bottomTextBuf, "+10s");
-        C2D_DrawText(&s_bottomTexts[7], C2D_WithColor, 255, 152, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
+        const char *ffLabel = s_fontMaterialIcons ? ICON_FORWARD_10 " 10s" : "+10s";
+        parse_text_font(&s_bottomTexts[7], s_fontUbuntuBold, s_bottomTextBuf, ffLabel);
+        C2D_DrawText(&s_bottomTexts[7], C2D_WithColor, 246, 152, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Description Toggle Button: (20, 196, 280, 36) */
         C2D_DrawRectSolid(20, 196, 0, 280, 36, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_bottomTexts[8], s_bottomTextBuf, "=== View Video Description ===");
+        parse_text_font(&s_bottomTexts[8], s_fontUbuntuBold, s_bottomTextBuf, "=== View Video Description ===");
         C2D_DrawText(&s_bottomTexts[8], C2D_WithColor, 55, 206, 0, 0.45f, 0.45f, COLOR_TEXT_WHITE);
 
     } else if (s_appState == STATE_COMMENTS) {
@@ -398,30 +467,32 @@ static void render_bottom_screen(void) {
 
         /* "< Back to Player" Button: (10, 5, 120, 24) */
         C2D_DrawRectSolid(8, 5, 0, 115, 24, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_bottomTexts[0], s_bottomTextBuf, "< Back to Player");
+        parse_text_font(&s_bottomTexts[0], s_fontUbuntuBold, s_bottomTextBuf, "< Back to Player");
         C2D_DrawText(&s_bottomTexts[0], C2D_WithColor, 14, 9, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
-        /* Description title */
-        C2D_TextParse(&s_bottomTexts[1], s_bottomTextBuf, "Description");
+        /* Description title (Andika Bold TTF) */
+        parse_text_font(&s_bottomTexts[1], s_fontAndikaBold, s_bottomTextBuf, "Description");
         C2D_DrawText(&s_bottomTexts[1], C2D_WithColor, 140, 9, 0, 0.48f, 0.48f, COLOR_ACCENT);
 
-        /* Render multi-line description snippet */
+        /* Render multi-line description snippet (Ubuntu Regular TTF) */
         C2D_DrawRectSolid(10, 42, 0, 300, 150, COLOR_PANEL);
         const char *desc = s_playback.currentVideo.description;
         if (!desc || strlen(desc) == 0) {
             desc = "No description provided for this video.";
         }
-        C2D_TextParse(&s_bottomTexts[2], s_bottomTextBuf, desc);
+        parse_text_font(&s_bottomTexts[2], s_fontUbuntuRegular, s_bottomTextBuf, desc);
         C2D_DrawText(&s_bottomTexts[2], C2D_WithColor, 18, 48 - s_descScrollOffset, 0, 0.40f, 0.40f, COLOR_TEXT_WHITE);
 
         /* Scroll Up / Down Touch Buttons */
         C2D_DrawRectSolid(10, 200, 0, 145, 32, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_bottomTexts[3], s_bottomTextBuf, "[^] Scroll Up");
-        C2D_DrawText(&s_bottomTexts[3], C2D_WithColor, 40, 208, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        const char *scrollUpLabel = s_fontMaterialIcons ? ICON_ARROW_UP " Scroll Up" : "[^] Scroll Up";
+        parse_text_font(&s_bottomTexts[3], s_fontUbuntuBold, s_bottomTextBuf, scrollUpLabel);
+        C2D_DrawText(&s_bottomTexts[3], C2D_WithColor, 35, 208, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         C2D_DrawRectSolid(165, 200, 0, 145, 32, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_bottomTexts[4], s_bottomTextBuf, "[v] Scroll Down");
-        C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 195, 208, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
+        const char *scrollDownLabel = s_fontMaterialIcons ? ICON_ARROW_DOWN " Scroll Down" : "[v] Scroll Down";
+        parse_text_font(&s_bottomTexts[4], s_fontUbuntuBold, s_bottomTextBuf, scrollDownLabel);
+        C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 185, 208, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
     } else {
         /* STATE_SEARCH: Invidious Search Results List */
@@ -429,22 +500,23 @@ static void render_bottom_screen(void) {
 
         /* Quick Search Tag 1: "3DS" (8, 6, 70, 24) */
         C2D_DrawRectSolid(8, 6, 0, 70, 24, COLOR_ACCENT);
-        C2D_TextParse(&s_bottomTexts[0], s_bottomTextBuf, "\"3ds\"");
+        parse_text_font(&s_bottomTexts[0], s_fontAndikaRegular, s_bottomTextBuf, "\"3ds\"");
         C2D_DrawText(&s_bottomTexts[0], C2D_WithColor, 26, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Quick Search Tag 2: "Homebrew" (84, 6, 95, 24) */
         C2D_DrawRectSolid(84, 6, 0, 95, 24, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_bottomTexts[1], s_bottomTextBuf, "\"homebrew\"");
+        parse_text_font(&s_bottomTexts[1], s_fontAndikaRegular, s_bottomTextBuf, "\"homebrew\"");
         C2D_DrawText(&s_bottomTexts[1], C2D_WithColor, 94, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Quick Search Tag 3: "Chiptune" (185, 6, 85, 24) */
         C2D_DrawRectSolid(185, 6, 0, 85, 24, COLOR_PANEL_ALT);
-        C2D_TextParse(&s_bottomTexts[2], s_bottomTextBuf, "\"chiptune\"");
+        parse_text_font(&s_bottomTexts[2], s_fontAndikaRegular, s_bottomTextBuf, "\"chiptune\"");
         C2D_DrawText(&s_bottomTexts[2], C2D_WithColor, 195, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         /* Refresh Button: (275, 6, 38, 24) */
         C2D_DrawRectSolid(275, 6, 0, 38, 24, COLOR_BUTTON_BLUE);
-        C2D_TextParse(&s_bottomTexts[3], s_bottomTextBuf, "[R]");
+        const char *refreshLabel = s_fontMaterialIcons ? ICON_REFRESH : "[R]";
+        parse_text_font(&s_bottomTexts[3], s_fontMaterialIcons ? s_fontMaterialIcons : s_fontUbuntuBold, s_bottomTextBuf, refreshLabel);
         C2D_DrawText(&s_bottomTexts[3], C2D_WithColor, 285, 10, 0, 0.42f, 0.42f, COLOR_TEXT_WHITE);
 
         if (s_searchResults.count == 0) {
@@ -453,13 +525,13 @@ static void render_bottom_screen(void) {
             C2D_DrawRectSolid(10, 44, 0, 4, 160, COLOR_ACCENT);
 
             if (s_searchResults.isLoading) {
-                C2D_TextParse(&s_bottomTexts[4], s_bottomTextBuf, "Connecting to Invidious...");
+                parse_text_font(&s_bottomTexts[4], s_fontAndikaBold, s_bottomTextBuf, "Connecting to Invidious...");
                 C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 20, 56, 0, 0.44f, 0.44f, COLOR_ACCENT);
 
-                C2D_TextParse(&s_bottomTexts[5], s_bottomTextBuf, "Fetching video results, please wait...");
+                parse_text_font(&s_bottomTexts[5], s_fontUbuntuRegular, s_bottomTextBuf, "Fetching video results, please wait...");
                 C2D_DrawText(&s_bottomTexts[5], C2D_WithColor, 20, 80, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
             } else {
-                C2D_TextParse(&s_bottomTexts[4], s_bottomTextBuf, "Invidious Status:");
+                parse_text_font(&s_bottomTexts[4], s_fontAndikaBold, s_bottomTextBuf, "Invidious Status:");
                 C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 20, 56, 0, 0.44f, 0.44f, COLOR_ACCENT);
 
                 char statusDetail[128];
@@ -470,16 +542,16 @@ static void render_bottom_screen(void) {
                 } else {
                     snprintf(statusDetail, sizeof(statusDetail), "0 videos found. Tap [R] to retry.");
                 }
-                C2D_TextParse(&s_bottomTexts[5], s_bottomTextBuf, statusDetail);
+                parse_text_font(&s_bottomTexts[5], s_fontUbuntuRegular, s_bottomTextBuf, statusDetail);
                 C2D_DrawText(&s_bottomTexts[5], C2D_WithColor, 20, 80, 0, 0.38f, 0.38f, COLOR_TEXT_WHITE);
 
-                C2D_TextParse(&s_bottomTexts[6], s_bottomTextBuf, "* Press (X) to cycle server instance");
+                parse_text_font(&s_bottomTexts[6], s_fontUbuntuRegular, s_bottomTextBuf, "* Press (X) to cycle server instance");
                 C2D_DrawText(&s_bottomTexts[6], C2D_WithColor, 20, 110, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
 
-                C2D_TextParse(&s_bottomTexts[7], s_bottomTextBuf, "* Press (Y) to type custom server");
+                parse_text_font(&s_bottomTexts[7], s_fontUbuntuRegular, s_bottomTextBuf, "* Press (Y) to type custom server");
                 C2D_DrawText(&s_bottomTexts[7], C2D_WithColor, 20, 134, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
 
-                C2D_TextParse(&s_bottomTexts[8], s_bottomTextBuf, "* Touch tags [\"3ds\", \"homebrew\"] or [R]");
+                parse_text_font(&s_bottomTexts[8], s_fontUbuntuRegular, s_bottomTextBuf, "* Touch tags [\"3ds\", \"homebrew\"] or [R]");
                 C2D_DrawText(&s_bottomTexts[8], C2D_WithColor, 20, 158, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
             }
         } else {
@@ -497,15 +569,15 @@ static void render_bottom_screen(void) {
                     C2D_DrawRectSolid(6, y, 0, 4, rowHeight, COLOR_ACCENT);
                 }
 
-                /* Video Title */
-                C2D_TextParse(&s_bottomTexts[4 + (i * 2)], s_bottomTextBuf, vid->title);
+                /* Video Title (Andika Bold TTF) */
+                parse_text_font(&s_bottomTexts[4 + (i * 2)], s_fontAndikaBold, s_bottomTextBuf, vid->title);
                 C2D_DrawText(&s_bottomTexts[4 + (i * 2)], C2D_WithColor, 16, y + 2, 0, 0.40f, 0.40f, COLOR_TEXT_WHITE);
 
-                /* Subtitle: Author and length */
+                /* Subtitle: Author and length (Ubuntu Regular TTF) */
                 char rowSub[96];
                 snprintf(rowSub, sizeof(rowSub), "%s * %d:%02d * Touch to Play",
                          vid->author, vid->lengthSeconds / 60, vid->lengthSeconds % 60);
-                C2D_TextParse(&s_bottomTexts[5 + (i * 2)], s_bottomTextBuf, rowSub);
+                parse_text_font(&s_bottomTexts[5 + (i * 2)], s_fontUbuntuRegular, s_bottomTextBuf, rowSub);
                 C2D_DrawText(&s_bottomTexts[5 + (i * 2)], C2D_WithColor, 16, y + 20, 0, 0.34f, 0.34f, COLOR_TEXT_MUTED);
             }
         }
@@ -515,8 +587,9 @@ static void render_bottom_screen(void) {
         C2D_DrawRectSolid(6, 212, 0, 3, 24, COLOR_ACCENT);
 
         char serverLabel[192];
-        snprintf(serverLabel, sizeof(serverLabel), "Server: %s [Tap/X/Y]", s_currentHost);
-        C2D_TextParse(&s_bottomTexts[16], s_bottomTextBuf, serverLabel);
+        snprintf(serverLabel, sizeof(serverLabel), "%sServer: %s [Tap/X/Y]",
+                 s_fontMaterialIcons ? ICON_DNS " " : "", s_currentHost);
+        parse_text_font(&s_bottomTexts[16], s_fontUbuntuRegular, s_bottomTextBuf, serverLabel);
         C2D_DrawText(&s_bottomTexts[16], C2D_WithColor, 14, 216, 0, 0.36f, 0.36f, COLOR_TEXT_WHITE);
     }
 }
@@ -660,6 +733,16 @@ int main(int argc, char **argv) {
     s_topTextBuf = C2D_TextBufNew(4096);
     s_bottomTextBuf = C2D_TextBufNew(4096);
 
+    /* Initialize 3DS RomFS virtual archive to load custom TTF fonts and icons */
+    bool romfsMounted = R_SUCCEEDED(romfsInit());
+
+    /* Load TTF fonts (Ubuntu & Andika) and Material Icons */
+    s_fontUbuntuRegular = load_3ds_font("fonts", "Ubuntu-R.ttf");
+    s_fontUbuntuBold    = load_3ds_font("fonts", "Ubuntu-B.ttf");
+    s_fontAndikaRegular = load_3ds_font("fonts", "Andika-Regular.ttf");
+    s_fontAndikaBold    = load_3ds_font("fonts", "Andika-Bold.ttf");
+    s_fontMaterialIcons = load_3ds_font("icons", "MaterialIcons-Regular.ttf");
+
     /* ------------------------------------------------------------------------
      * 2. 3DS SOC (Socket Service) and Network Initialization
      * ------------------------------------------------------------------------ */
@@ -781,6 +864,17 @@ int main(int argc, char **argv) {
      * ------------------------------------------------------------------------ */
     citro_battery_exit();
     invidious_exit();
+
+    /* Free custom TTF and Material Icon fonts */
+    if (s_fontUbuntuRegular) C2D_FontFree(s_fontUbuntuRegular);
+    if (s_fontUbuntuBold)    C2D_FontFree(s_fontUbuntuBold);
+    if (s_fontAndikaRegular) C2D_FontFree(s_fontAndikaRegular);
+    if (s_fontAndikaBold)    C2D_FontFree(s_fontAndikaBold);
+    if (s_fontMaterialIcons) C2D_FontFree(s_fontMaterialIcons);
+
+    if (romfsMounted) {
+        romfsExit();
+    }
 
     if (s_socBuffer) {
         socExit();
