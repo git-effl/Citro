@@ -204,13 +204,16 @@ static void launch_video(const VideoMetadata *video) {
 
     s_appState = STATE_PLAYBACK;
 
-    /* Fetch full description and likes asynchronously or on demand */
+    /* Start progressive HTTP streaming directly into RAM (zero SD card writes) */
+    citro_stream_start(s_currentHost, video->videoId, &s_playback);
+
+    /* Fetch full description and likes */
     invidious_fetch_video_details(s_currentHost, video->videoId, &s_playback.currentVideo);
 }
 
 /**
  * RENDER: Top Screen (400x240)
- * Handles video view and the 5-second active title OSD banner.
+ * Handles video streaming viewport and the 5-second active title OSD banner.
  */
 static void render_top_screen(void) {
     /* Clear top background */
@@ -218,11 +221,41 @@ static void render_top_screen(void) {
     C2D_TextBufClear(s_topTextBuf);
 
     if (s_appState == STATE_PLAYBACK || s_appState == STATE_COMMENTS) {
-        /* Render simulated video playback viewport (400x200 16:9 box) */
-        C2D_DrawRectSolid(20, 10, 0, 360, 200, C2D_Color32(12, 12, 16, 255));
+        /* Render video playback stage (400x200 16:9 box) */
+        C2D_DrawRectSolid(20, 10, 0, 360, 200, C2D_Color32(12, 16, 20, 255));
+        C2D_DrawRectSolid(22, 12, 0, 356, 194, C2D_Color32(16, 22, 28, 255));
 
-        /* Render mock video content/waves or frame indicator */
-        C2D_DrawRectSolid(22, 12, 0, 356, 196, C2D_Color32(20, 24, 30, 255));
+        /* Live Progressive Streaming HUD Header Bar */
+        C2D_DrawRectSolid(22, 12, 0, 356, 24, C2D_Color32(10, 14, 18, 240));
+        C2D_DrawRectSolid(22, 35, 0, 356, 1, C2D_Color32(40, 55, 42, 255));
+
+        /* Streaming Pill Badge (In-Memory RAM • 0 KB on SD) */
+        C2D_DrawRectSolid(26, 15, 0, 142, 18, C2D_Color32(24, 40, 20, 255));
+        C2D_DrawRectSolid(26, 15, 0, 3, 18, COLOR_BUTTON_BLUE);
+        parse_text_font(&s_topTexts[8], s_fontUbuntuBold, s_topTextBuf, "STREAM (RAM ONLY)");
+        C2D_DrawText(&s_topTexts[8], C2D_WithColor, 32, 17, 0, 0.36f, 0.36f, COLOR_BUTTON_BLUE);
+
+        /* Throughput and Buffer status */
+        char streamStats[96];
+        float streamedMB = (float)s_playback.streamBytesReceived / (1024.0f * 1024.0f);
+        snprintf(streamStats, sizeof(streamStats), "%.0f KB/s | Buf: %d%% | %.1f MB",
+                 s_playback.streamSpeedKBps, s_playback.bufferFillPercent, streamedMB);
+        parse_text_font(&s_topTexts[9], s_fontUbuntuRegular, s_topTextBuf, streamStats);
+        C2D_DrawText(&s_topTexts[9], C2D_WithColor, 174, 17, 0, 0.36f, 0.36f, COLOR_TEXT_MUTED);
+
+        /* Real-Time Audio / Video Waveform Visualizer (16 dynamic animated spectrum bands) */
+        for (int b = 0; b < 16; b++) {
+            int barX = 36 + (b * 21);
+            float level = s_playback.audioLevels[b];
+            int barHeight = (int)(level * 52.0f);
+            if (barHeight < 4) barHeight = 4;
+            int barY = 168 - barHeight;
+
+            /* Bar body in Citric Lime */
+            C2D_DrawRectSolid(barX, barY, 0, 16, barHeight, C2D_Color32(132, 204, 22, 220));
+            /* Peak cap in Citrus Orange */
+            C2D_DrawRectSolid(barX, barY - 2, 0, 16, 2, COLOR_SEEK_FILL);
+        }
 
         /* Playback progress bar at bottom of top screen */
         float progress = 0.0f;
@@ -230,15 +263,22 @@ static void render_top_screen(void) {
             progress = s_playback.currentPositionSec / (float)s_playback.currentVideo.lengthSeconds;
             if (progress > 1.0f) progress = 1.0f;
         }
+        /* Background */
         C2D_DrawRectSolid(20, 206, 0, 360, 4, COLOR_SEEK_BG);
+        /* Buffer Fill Bar */
+        int bufWidth = (int)(360.0f * ((float)s_playback.bufferFillPercent / 100.0f));
+        C2D_DrawRectSolid(20, 206, 0, bufWidth, 4, C2D_Color32(65, 80, 58, 255));
+        /* Playback Progress */
         C2D_DrawRectSolid(20, 206, 0, (int)(360.0f * progress), 4, COLOR_SEEK_FILL);
 
         /* Center Video ID & Channel info */
         char topInfoStr[128];
-        snprintf(topInfoStr, sizeof(topInfoStr), "Channel: %s | ID: %s",
-                 s_playback.currentVideo.author, s_playback.currentVideo.videoId);
+        snprintf(topInfoStr, sizeof(topInfoStr), "Ch: %s | ID: %s | %s",
+                 s_playback.currentVideo.author,
+                 s_playback.currentVideo.videoId,
+                 s_playback.streamQuality[0] ? s_playback.streamQuality : "360p MP4");
         parse_text_font(&s_topTexts[0], s_fontUbuntuRegular, s_topTextBuf, topInfoStr);
-        C2D_DrawText(&s_topTexts[0], C2D_WithColor, 30, 180, 0, 0.45f, 0.45f, COLOR_TEXT_MUTED);
+        C2D_DrawText(&s_topTexts[0], C2D_WithColor, 28, 178, 0, 0.42f, 0.42f, COLOR_TEXT_MUTED);
 
         /* --------------------------------------------------------------------
          * 5-Second Title Banner OSD Requirement:
@@ -425,7 +465,14 @@ static void render_bottom_screen(void) {
         int totS = s_playback.currentVideo.lengthSeconds % 60;
         snprintf(timeStr, sizeof(timeStr), "%02d:%02d / %02d:%02d", curM, curS, totM, totS);
         parse_text_font(&s_bottomTexts[4], s_fontUbuntuRegular, s_bottomTextBuf, timeStr);
-        C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 20, 112, 0, 0.40f, 0.40f, COLOR_TEXT_MUTED);
+        C2D_DrawText(&s_bottomTexts[4], C2D_WithColor, 20, 110, 0, 0.38f, 0.38f, COLOR_TEXT_MUTED);
+
+        /* RAM Streaming Guarantee Badge (Zero disk storage used) */
+        char ramStreamBadge[128];
+        snprintf(ramStreamBadge, sizeof(ramStreamBadge), "RAM Stream: 0 KB on SD | %s",
+                 s_playback.streamStatus == STREAM_PLAYING ? "Live" : "Buffering");
+        parse_text_font(&s_bottomTexts[9], s_fontUbuntuRegular, s_bottomTextBuf, ramStreamBadge);
+        C2D_DrawText(&s_bottomTexts[9], C2D_WithColor, 150, 110, 0, 0.36f, 0.36f, COLOR_BUTTON_BLUE);
 
         /* --------------------------------------------------------------------
          * Touch Transport Controls (with Material Icons TTF)
@@ -601,6 +648,7 @@ static void handle_touch_input(touchPosition touch) {
     if (s_appState == STATE_PLAYBACK) {
         /* Back to Search: (8, 5, 75, 24) */
         if (is_touch_inside(touch, 8, 5, 75, 24)) {
+            citro_stream_stop(&s_playback);
             s_appState = STATE_SEARCH;
             return;
         }
@@ -815,6 +863,7 @@ int main(int argc, char **argv) {
             if (s_appState == STATE_COMMENTS) {
                 s_appState = STATE_PLAYBACK;
             } else if (s_appState == STATE_PLAYBACK) {
+                citro_stream_stop(&s_playback);
                 s_appState = STATE_SEARCH;
             }
         }
@@ -826,10 +875,16 @@ int main(int argc, char **argv) {
             handle_touch_input(touch);
         }
 
+        /* Non-blocking Progressive HTTP Streamer: pumps packets into RAM & animates visualizer */
+        if (s_appState == STATE_PLAYBACK && s_playback.isPlaying) {
+            citro_stream_update(&s_playback);
+        }
+
         /* Advance simulated playback timer at 60 FPS (~0.0166s per frame) */
-        if (s_playback.isPlaying && s_playback.currentVideo.lengthSeconds > 0) {
+        if (s_playback.isPlaying) {
             s_playback.currentPositionSec += (1.0f / 60.0f);
-            if (s_playback.currentPositionSec >= (float)s_playback.currentVideo.lengthSeconds) {
+            if (s_playback.currentVideo.lengthSeconds > 0 &&
+                s_playback.currentPositionSec >= (float)s_playback.currentVideo.lengthSeconds) {
                 s_playback.currentPositionSec = (float)s_playback.currentVideo.lengthSeconds;
                 s_playback.isPlaying = false;
             }
@@ -862,6 +917,7 @@ int main(int argc, char **argv) {
     /* ------------------------------------------------------------------------
      * 5. Clean Teardown & Resource Release
      * ------------------------------------------------------------------------ */
+    citro_stream_stop(&s_playback);
     citro_battery_exit();
     invidious_exit();
 

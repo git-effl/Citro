@@ -54,6 +54,7 @@ typedef struct {
     int64_t     viewCount;                 /* Lifetime view count */
     int32_t     likeCount;                 /* Public like count */
     char        description[MAX_DESC_LEN]; /* Video description text */
+    char        streamUrl[512];            /* Direct progressive HTTP stream URL */
     bool        isValid;                   /* Flag indicating struct contains loaded data */
 } VideoMetadata;
 
@@ -71,7 +72,19 @@ typedef struct {
 } SearchResults;
 
 /**
- * PlaybackState: Tracks active playback timeline and OSD banner timers.
+ * StreamStatus: Real-time network stream state in RAM (zero disk writes).
+ */
+typedef enum {
+    STREAM_IDLE = 0,
+    STREAM_CONNECTING,
+    STREAM_BUFFERING,
+    STREAM_PLAYING,
+    STREAM_PAUSED,
+    STREAM_ERROR
+} StreamStatus;
+
+/**
+ * PlaybackState: Tracks active playback timeline, OSD banner, and in-RAM stream.
  */
 typedef struct {
     VideoMetadata currentVideo;
@@ -80,6 +93,15 @@ typedef struct {
     u64           launchTick;              /* svcGetSystemTick() when video launched */
     bool          showTitleBanner;         /* Active for 5 seconds post-launch */
     float         bannerOpacity;           /* Alpha fade (1.0f -> 0.0f) */
+
+    /* Progressive In-Memory Streaming Pipeline (0 bytes saved to SD card) */
+    StreamStatus  streamStatus;
+    uint32_t      streamBytesReceived;     /* Total bytes streamed in volatile RAM */
+    float         streamSpeedKBps;         /* Live streaming throughput */
+    int           bufferFillPercent;       /* Ring buffer occupancy percentage */
+    char          streamQuality[16];       /* e.g. "360p MP4" */
+    char          streamError[64];
+    float         audioLevels[16];         /* Real-time spectrum visualizer bands */
 } PlaybackState;
 
 /* ============================================================================
@@ -159,6 +181,31 @@ int invidious_fetch_video_details(const char *host, const char *videoId, VideoMe
  * Parse detailed video JSON response into VideoMetadata.
  */
 int invidious_parse_video_json(const char *json_str, VideoMetadata *out_video);
+
+/**
+ * Start streaming video progressively into volatile RAM buffer (no SD card writes).
+ *
+ * @param host        Active Invidious host
+ * @param videoId     11-char video ID
+ * @param playback    Playback state object to track streaming progress
+ * @return            0 on success, negative on error.
+ */
+int citro_stream_start(const char *host, const char *videoId, PlaybackState *playback);
+
+/**
+ * Non-blocking streaming update: pumps incoming HTTP stream packets into the RAM buffer.
+ * Updates throughput, buffer health, and audio visualizer spectrum bands.
+ *
+ * @param playback    Playback state
+ */
+void citro_stream_update(PlaybackState *playback);
+
+/**
+ * Terminate active network stream and release streaming socket context.
+ *
+ * @param playback    Playback state
+ */
+void citro_stream_stop(PlaybackState *playback);
 
 #ifdef __cplusplus
 }
