@@ -61,9 +61,12 @@ Copy `Citro.3dsx` to your Nintendo 3DS SD card at `/3ds/Citro/Citro.3dsx` and la
 
 ---
 
+## LLM Usage
+LLM's we're used to produce this app. You might incounter bugs when using the app. In the future i'll add App Info on the Makefile.
+
 ## Licensing
 
-Citro is distributed under GPL3,Other License would be used for the project.
+Citro is distributed under GPL3,Other Licenses would be used for the project.
 1. **Primary License**: [GNU General Public License v3.0 (GPL-3.0)](LICENSE)
 2. **Material 3**: [Apache License 2.0 (Apache-2.0)](LICENSE-2)
 3. **Material 3**: [Creative Commons Attribution 4.0 International(CC-BY 4.0)](LICENSE-3)
